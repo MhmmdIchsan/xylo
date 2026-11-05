@@ -1,8 +1,43 @@
 # Xylo
 
-Xylo is a planned Dynamic Island for Windows: a compact desktop notch for AI agent activity, notifications, and quick clipboard access.
+Xylo is a Dynamic Island for Windows: a compact desktop notch being developed for AI agent activity, notifications, and quick clipboard access.
 
-The project is in its initial setup stage. There is no application implementation yet.
+The first desktop prototype is implemented. It currently provides the notch shell; agent integrations, notification previews, and clipboard history are not implemented yet.
+
+## Available now
+
+- Native topmost notch attached to the primary display's top edge, without taking keyboard focus on hover.
+- Hover to expand; move away to collapse after a brief grace period.
+- Composition-paced spring animation, fading content, and transparent hit testing.
+- System tray menu to expand/collapse or quit.
+- `Ctrl+Alt+X` global toggle shortcut, when available.
+- DPI-aware rendering and surface recreation after display changes.
+- Single-instance startup and message-driven idle behavior: no continuous rendering when settled.
+
+## Build and run
+
+Requires Windows 10/11 x64 and the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+
+```powershell
+dotnet build src/Xylo/Xylo.csproj -c Release
+dotnet run --project src/Xylo/Xylo.csproj -c Release --no-build
+```
+
+Right-click the notch or tray icon and choose **Quit Xylo** to exit. The notch currently uses the top center of the primary display. Multi-monitor selection and persistent settings are planned.
+
+Create a framework-dependent folder build (requires the .NET 8 x64 runtime on the target computer):
+
+```powershell
+dotnet publish src/Xylo/Xylo.csproj -c Release --self-contained false -o artifacts/xylo
+```
+
+The automated Windows smoke test runs ten expand/collapse transitions, checks for continued rendering at idle and GDI resource growth, and reports memory and CPU measurements:
+
+```powershell
+powershell -File tools/smoke-test.ps1
+```
+
+Quit any running instance before testing. The test briefly shows the notch and exits automatically; its report is written to `%TEMP%/xylo-smoke-test.json`. Startup errors are written to `%LOCALAPPDATA%/Xylo/last-error.txt`.
 
 ## Planned features
 
@@ -16,13 +51,13 @@ Planned agent integrations include Codex, Claude Code, OpenCode, Cursor, and Ant
 
 ## Technical direction
 
-Xylo plans to adapt the native C# / SkiaSharp / Win32 foundation of [WinIsland](https://github.com/zHeuzy2/WinIsland). Upstream code has not been imported. Applicable copyright notices and license terms will be preserved when code is adapted.
+Xylo adapts the native C# / SkiaSharp / Win32 foundation of [WinIsland](https://github.com/zHeuzy2/WinIsland). The Win32 declarations and spring integrator are adapted from upstream; the desktop shell and renderer are tailored to Xylo. See [third-party notices](third-party/README.md).
 
-The initial memory target is **at most 50 MB at idle**, including Xylo helper processes. This is an unverified engineering target, not a measured result. Event-driven integrations, bounded caches, and rendering only when necessary will guide implementation.
+The initial memory target is **at most 50 MB at idle**, including Xylo helper processes. Short local smoke tests of the desktop shell measured approximately **33 MiB working set** and **10 MiB private bytes**, with no additional helper processes. These are preliminary measurements, not a long-running or fully integrated product guarantee. See [performance notes](docs/performance.md).
 
 ## Development status
 
-This repository currently contains project documentation, a license, and Git ignore rules. Build and run instructions will be added with the first application implementation.
+This is an early desktop prototype, not a complete agent integration product. There are no background agent watchers, camera services, weather requests, or automatic updater in this version. GitHub Actions builds a Windows folder artifact; GUI smoke testing runs locally in an interactive Windows session.
 
 ## License
 
