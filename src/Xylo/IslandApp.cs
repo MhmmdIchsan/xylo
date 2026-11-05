@@ -461,7 +461,7 @@ internal sealed partial class IslandApp : IDisposable
                 else if (wParam.ToInt64() == ChargeAnimationTimer) _dirty = true;
                 else if (wParam.ToInt64() == AgentFrameTimer)
                 {
-                    if (!MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice, UserMotionActive())) KillTimer(hwnd, (UIntPtr)AgentFrameTimer);
+                    if (!MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice, UserMotionActive(), _userAfk)) KillTimer(hwnd, (UIntPtr)AgentFrameTimer);
                     else _dirty = true;
                 }
                 else if (wParam.ToInt64() == UserIdleTimer) RefreshUserIdle();
@@ -554,12 +554,20 @@ internal sealed partial class IslandApp : IDisposable
 
     private void SyncAgentAnimation()
     {
-        if (MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice, UserMotionActive())) SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, 50, IntPtr.Zero);
+        var activity = _agents?.Activity;
+        var approval = _agents?.Pending;
+        var notice = _agents?.Notice;
+        bool userMotion = UserMotionActive();
+        if (MascotNeedsAnimation(activity, approval, notice, userMotion, _userAfk))
+        {
+            bool sleepingOnly = _userAfk && activity?.Working != true && approval == null && notice == null;
+            SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, sleepingOnly ? 50u : 33u, IntPtr.Zero);
+        }
         else KillTimer(_hwnd, (UIntPtr)AgentFrameTimer);
     }
 
-    internal static bool MascotNeedsAnimation(AgentActivity? activity, AgentApproval? approval, AgentNotice? notice, bool userMotion = false) =>
-        activity?.Working == true || approval != null || notice != null || userMotion;
+    internal static bool MascotNeedsAnimation(AgentActivity? activity, AgentApproval? approval, AgentNotice? notice, bool userMotion = false, bool userAfk = false) =>
+        activity?.Working == true || approval != null || notice != null || userMotion || userAfk;
 
     private bool UserMotionActive() => !_userAfk && _userMotionStarted >= 0 && _clock.Elapsed.TotalSeconds - _userMotionStarted < 0.7;
     internal static bool IsUserAfk(uint now, uint lastInput) => unchecked(now - lastInput) >= 60000;
@@ -572,7 +580,7 @@ internal sealed partial class IslandApp : IDisposable
         bool freshInput = _inputInitialized && info.Time != _lastInputTick && !idle;
         _lastInputTick = info.Time;
         _inputInitialized = true;
-        if (_userAfk != idle) { _userAfk = idle; _dirty = true; }
+        if (_userAfk != idle) { _userAfk = idle; _dirty = true; SyncAgentAnimation(); }
         if (freshInput)
         {
             _userMotionStarted = _clock.Elapsed.TotalSeconds;

@@ -58,7 +58,7 @@ internal static class SelfTest
                 canvas.Flush();
             }
             Render(first, 0); Render(second, 0.35);
-            for (int y = 6; y <= 37; y++)
+            for (int y = 0; y <= 37; y++)
                 for (int x = 158; x <= 196; x++)
                     if (first.GetPixel(x, y) != second.GetPixel(x, y)) return true;
             return false;
@@ -67,9 +67,12 @@ internal static class SelfTest
         var input = new AgentNotice("Codex", "test", "r", "User input", "test", DateTimeOffset.UtcNow, true);
         var interrupted = agent with { Working = false, Interrupted = true };
         return HasMotion(agent, null, null) && HasMotion(null, approval, null) && HasMotion(null, null, input) && !HasMotion(null, null, null)
-            && HasMotion(null, null, null, false, 0) && !HasMotion(null, null, null, true)
+            && HasMotion(null, null, null, false, 0) && HasMotion(null, null, null, true)
             && IslandApp.MascotNeedsAnimation(agent, null, null) && IslandApp.MascotNeedsAnimation(null, approval, null)
-            && IslandApp.MascotNeedsAnimation(null, null, input) && !IslandApp.MascotNeedsAnimation(interrupted, null, null);
+            && IslandApp.MascotNeedsAnimation(null, null, input) && !IslandApp.MascotNeedsAnimation(interrupted, null, null)
+            && IslandApp.MascotNeedsAnimation(interrupted, null, null, userAfk: true)
+            && IslandRenderer.SleepGlyphOpacity(3.2 * 0.70, 2) > IslandRenderer.SleepGlyphOpacity(3.2 * 0.98, 2)
+            && IslandRenderer.SleepGlyphOpacity(0, 2) == 0;
     }
 
     private static bool TestMediaRendering()

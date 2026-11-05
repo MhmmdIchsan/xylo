@@ -77,7 +77,7 @@ internal sealed class IslandRenderer : IDisposable
             float length = _maskMeasure.Length;
             if (length > 0)
             {
-                float start = (float)(seconds * 42 % length), end = start + length * 0.28f;
+                float start = (float)(seconds * 55 % length), end = start + length * 0.28f;
                 _maskSegment.Reset();
                 _maskMeasure.GetSegment(start, Math.Min(end, length), _maskSegment, true);
                 if (end > length) _maskMeasure.GetSegment(0, end - length, _maskSegment, true);
@@ -125,8 +125,11 @@ internal sealed class IslandRenderer : IDisposable
         }
         else if (sleeping)
         {
-            Text(canvas, "z", left + 32, 7, 6, new SKColor(150, 190, 178));
-            Text(canvas, "z", left + 39, 5, 5, new SKColor(115, 155, 150));
+            for (int i = 0; i < 3; i++)
+            {
+                byte alpha = (byte)Math.Round(190 * SleepGlyphOpacity(seconds, i));
+                Text(canvas, "z", left + 28 + i * 6, 8 - i, 6 - i * 0.5f, new SKColor(150, 205, 188, alpha));
+            }
         }
         if (prompt != null)
             Text(canvas, "Attention", left + 52, 26, 12, SKColors.White);
@@ -452,6 +455,14 @@ internal sealed class IslandRenderer : IDisposable
         canvas.DrawRoundRect(new SKRect(x, y, x + width, y + 4), 2, 2, _paint);
         _paint.Color = new SKColor(130, 230, 190);
         canvas.DrawRoundRect(new SKRect(x, y, x + width * Math.Clamp(progress, 0, 1), y + 4), 2, 2, _paint);
+    }
+
+    internal static double SleepGlyphOpacity(double seconds, int index)
+    {
+        double phase = (seconds % 3.2) / 3.2;
+        double appear = Math.Clamp((phase - index * 0.22) / 0.12, 0, 1);
+        double fade = 1 - Math.Clamp((phase - (0.68 + index * 0.08)) / 0.16, 0, 1);
+        return appear * fade;
     }
 
     private void DrawQuota(SKCanvas canvas, float x, float y, CodexLimitWindow? window)
