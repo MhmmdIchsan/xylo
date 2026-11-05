@@ -43,12 +43,21 @@ internal sealed class IslandRenderer : IDisposable
         _paint.Style = SKPaintStyle.Fill;
         canvas.ClipPath(_outline, SKClipOperation.Intersect, true);
 
+        _paint.Color = new SKColor(70, 82, 89);
+        _paint.Style = SKPaintStyle.Stroke;
+        _paint.StrokeWidth = 1;
+        canvas.DrawRoundRect(new SKRect(left + 13, 10, left + 42, 32), 8, 8, _paint);
         _paint.Color = new SKColor(130, 230, 190);
         float blink = blinkStarted < 0 ? 0 : (float)Math.Sin(Math.Clamp((seconds - blinkStarted) / 0.3, 0, 1) * Math.PI);
-        float eyeHeight = 4.8f - blink * 4.0f;
-        canvas.DrawRoundRect(new SKRect(left + 17, 21 - eyeHeight, left + 23, 21 + eyeHeight), 3, 3, _paint);
-        canvas.DrawRoundRect(new SKRect(left + 26, 21 - eyeHeight, left + 32, 21 + eyeHeight), 3, 3, _paint);
-        Text(canvas, "Xylo", left + 38, 30, 15, SKColors.White);
+        float eyeHeight = 4.0f - blink * 3.5f;
+        _paint.StrokeWidth = 2;
+        _paint.StrokeCap = SKStrokeCap.Round;
+        foreach (float eyeX in new[] { left + 22, left + 33 })
+        {
+            canvas.DrawLine(eyeX - 3, 21 - eyeHeight, eyeX + 3, 21 + eyeHeight, _paint);
+            canvas.DrawLine(eyeX + 3, 21 - eyeHeight, eyeX - 3, 21 + eyeHeight, _paint);
+        }
+        _paint.Style = SKPaintStyle.Fill;
         if (battery.Percent is int percent)
         {
             float centerX = right - 23;
