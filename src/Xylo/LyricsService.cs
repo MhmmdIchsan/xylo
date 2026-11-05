@@ -8,24 +8,37 @@ namespace Xylo;
 internal sealed record LyricLine(double At, string Text);
 internal sealed record LyricsSnapshot(string Key, LyricLine[] Lines, string? Plain, string Status)
 {
+    private readonly string[] _plainVisible = Plain?.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(3).ToArray() ?? Array.Empty<string>();
+
+    private int CurrentIndex(double position)
+    {
+        int low = 0, high = Lines.Length;
+        while (low < high)
+        {
+            int middle = low + (high - low) / 2;
+            if (Lines[middle].At <= position) low = middle + 1;
+            else high = middle;
+        }
+        return low - 1;
+    }
+
     public string Current(double position)
     {
-        if (Lines.Length == 0) return Plain?.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault() ?? Status;
-        string result = "♪";
-        foreach (var line in Lines)
-        {
-            if (line.At > position) break;
-            result = string.IsNullOrWhiteSpace(line.Text) ? "♪" : line.Text;
-        }
-        return result;
+        if (Lines.Length == 0) return _plainVisible.FirstOrDefault() ?? Status;
+        int current = CurrentIndex(position);
+        return current < 0 || string.IsNullOrWhiteSpace(Lines[current].Text) ? "♪" : Lines[current].Text;
     }
 
     public string[] Visible(double position)
     {
         if (Lines.Length == 0)
-            return Plain?.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(3).ToArray() ?? new[] { Status };
-        int current = Array.FindLastIndex(Lines, line => line.At <= position);
-        return Lines.Skip(Math.Max(0, current)).Take(3).Select(line => string.IsNullOrWhiteSpace(line.Text) ? "♪" : line.Text).ToArray();
+            return Plain == null ? new[] { Status } : _plainVisible;
+        int current = Math.Max(0, CurrentIndex(position));
+        int count = Math.Min(3, Lines.Length - current);
+        var visible = new string[count];
+        for (int i = 0; i < count; i++)
+            visible[i] = string.IsNullOrWhiteSpace(Lines[current + i].Text) ? "♪" : Lines[current + i].Text;
+        return visible;
     }
 }
 
