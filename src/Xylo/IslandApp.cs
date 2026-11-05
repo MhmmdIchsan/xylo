@@ -11,7 +11,7 @@ internal sealed partial class IslandApp : IDisposable
 {
     public const float CanvasWidth = 700;
     private const float CanvasHeight = 420;
-    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9, ClockTimer = 10;
+    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9, ClockTimer = 10, AgentFrameTimer = 11;
     private const uint PreviewMessage = 0x8004, NotificationStatusMessage = 0x8005, HudMessage = 0x8006;
     private readonly WndProc _windowProcedure;
     private readonly IslandRenderer _renderer = new();
@@ -33,6 +33,7 @@ internal sealed partial class IslandApp : IDisposable
     private bool _testClipboardToggled;
     private int _testFocusActions;
     private float _scale = 1;
+    private RECT _displayBounds;
     private int _pixelWidth, _pixelHeight, _x, _y, _smokeTicks;
     private double _lastFrame;
     private long _renderCount;
@@ -166,7 +167,7 @@ internal sealed partial class IslandApp : IDisposable
     {
         bool needsDetail = (_slide == 4 && _media?.Snapshot != null) || _agents?.Pending != null || _agents?.Notice != null || _preview != null;
         bool wideMusic = _expanded && _slide == 4 && _settings.LyricsEnabled && _prompt == null && _review == null && _composer == null && _panel == null && _agents?.Pending == null && _agents?.Notice == null && _preview == null;
-        double targetWidth = wideMusic ? Math.Min(660, Math.Max(400, GetSystemMetrics(SM_CXSCREEN) / _scale - 20)) : _prompt != null || _review != null || _composer != null || _panel != null || _expanded ? 400 : (needsDetail ? 400 : _slide == 1 && _agents?.Activity != null ? 300 : 220);
+        double targetWidth = wideMusic ? Math.Min(660, Math.Max(400, (_displayBounds.right - _displayBounds.left) / _scale - 20)) : _prompt != null || _review != null || _composer != null || _panel != null || _expanded ? 400 : (needsDetail ? 400 : _slide == 1 && _agents?.Activity != null ? 300 : 220);
         double targetHeight = _prompt != null ? 300 : _review != null ? 400 : _composer != null ? 300 : _panel != null ? 380 : _expanded ? 236 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
         _width.Target = targetWidth;
@@ -193,6 +194,9 @@ internal sealed partial class IslandApp : IDisposable
                 break;
             case 0x801B:
                 if (_taskTest) return new IntPtr((int)Math.Round(_height.Value) - (int)Math.Round(_height.Target));
+                break;
+            case 0x801C:
+                if (_taskTest) return new IntPtr((int)Math.Round(_scale * 1000));
                 break;
             case WM_NCHITTEST:
                 float x = ((short)(lParam.ToInt64() & 0xffff) - _x) / _scale;
@@ -297,12 +301,14 @@ internal sealed partial class IslandApp : IDisposable
                     float localX = mx - left;
                     if (my is >= 48 and <= 78 && localX is >= 24 and < 376)
                     {
-                        _slide = Math.Clamp((int)((localX - 24) / (352f / 7)), 0, 6);
+                        var visible = _settings.VisibleTabs();
+                        _slide = visible[Math.Clamp((int)((localX - 24) / (352f / visible.Length)), 0, visible.Length - 1)];
                         _settings.DashboardSlide = _slide;
                         try { _settings.Save(); }
                         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
                         { ShowPrompt("View", "Could not save the selected view."); }
                         if (_taskTest) _testSlides |= 1 << _slide;
+                        SyncAgentAnimation();
                         UpdateTarget();
                         _dirty = true;
                         return IntPtr.Zero;
@@ -352,6 +358,7 @@ internal sealed partial class IslandApp : IDisposable
                 return IntPtr.Zero;
             case WM_APP_UPDATE:
                 _lyrics?.Update(_media?.Snapshot);
+                SyncAgentAnimation();
                 if (_agents?.Pending != null && _panel != null) { _panel = null; _panelView = null; _menuOpen = false; }
                 if (_review != null && !ReferenceEquals(_agents?.Pending, _review.Request)) _review = null;
                 if (_agents?.Notice != null) SetTimer(hwnd, (UIntPtr)NoticeTimer, 5000, IntPtr.Zero);
@@ -439,6 +446,11 @@ internal sealed partial class IslandApp : IDisposable
                 else if (_smokeTest && wParam.ToInt64() == SmokeTimer) SmokeTick();
                 else if (wParam.ToInt64() == BatteryTimer) RefreshBattery();
                 else if (wParam.ToInt64() == ChargeAnimationTimer) _dirty = true;
+                else if (wParam.ToInt64() == AgentFrameTimer)
+                {
+                    if (_slide != 1 || _agents?.Activity?.Working != true) KillTimer(hwnd, (UIntPtr)AgentFrameTimer);
+                    else _dirty = true;
+                }
                 else if (wParam.ToInt64() == ClockTimer) _dirty = true;
                 else if (wParam.ToInt64() == BlinkTimer)
                 {
@@ -494,6 +506,7 @@ internal sealed partial class IslandApp : IDisposable
             case WM_DISPLAYCHANGE:
             case WM_DPICHANGED:
                 BuildSurface();
+                UpdateTarget();
                 _dirty = true;
                 return IntPtr.Zero;
             case 0x0010: // WM_CLOSE
@@ -524,15 +537,25 @@ internal sealed partial class IslandApp : IDisposable
         return Math.Pow(x - nearestX, 2) + Math.Pow(y - nearestY, 2) <= radius * radius;
     }
 
+    private void SyncAgentAnimation()
+    {
+        if (_slide == 1 && _agents?.Activity?.Working == true) SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, 80, IntPtr.Zero);
+        else KillTimer(_hwnd, (UIntPtr)AgentFrameTimer);
+    }
+
     private void BuildSurface()
     {
         ReleaseSurface();
+        var monitors = GetDisplays();
+        var display = monitors[Math.Clamp(_settings.MonitorIndex, 0, monitors.Count - 1)];
+        _displayBounds = display.Bounds;
         uint dpi = GetDpiForWindow(_hwnd);
-        _scale = dpi == 0 ? 1 : dpi / 96f;
+        try { if (GetDpiForMonitor(display.Handle, 0, out uint monitorDpi, out _) == 0 && monitorDpi > 0) dpi = monitorDpi; } catch (DllNotFoundException) { }
+        _scale = (dpi == 0 ? 1 : dpi / 96f) * (_settings.SizePreset == 0 ? 0.9f : _settings.SizePreset == 2 ? 1.1f : 1f);
         _pixelWidth = (int)Math.Ceiling(CanvasWidth * _scale);
         _pixelHeight = (int)Math.Ceiling(CanvasHeight * _scale);
-        _x = (GetSystemMetrics(SM_CXSCREEN) - _pixelWidth) / 2;
-        _y = _settings.Detached ? (int)(12 * _scale) : 0;
+        _x = _displayBounds.left + (_displayBounds.right - _displayBounds.left - _pixelWidth) / 2;
+        _y = _displayBounds.top + (_settings.Detached ? (int)(12 * _scale) : 0);
         IntPtr screenDc = GetDC(IntPtr.Zero);
         try
         {
@@ -552,10 +575,18 @@ internal sealed partial class IslandApp : IDisposable
         finally { ReleaseDC(IntPtr.Zero, screenDc); }
     }
 
+    private static List<(IntPtr Handle, RECT Bounds)> GetDisplays()
+    {
+        var displays = new List<(IntPtr, RECT)>();
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data) => { displays.Add((monitor, rect)); return true; }, IntPtr.Zero);
+        if (displays.Count == 0) displays.Add((IntPtr.Zero, new RECT { right = GetSystemMetrics(SM_CXSCREEN), bottom = GetSystemMetrics(SM_CYSCREEN) }));
+        return displays;
+    }
+
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _notifications?.ActiveNotifications ?? Array.Empty<NotificationPreview>(), _notifications?.Active == true, _clipboardListening, _clipboard.Items);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _notifications?.ActiveNotifications ?? Array.Empty<NotificationPreview>(), _notifications?.Active == true, _clipboardListening, _clipboard.Items, _settings.ShowBatteryPercent, _settings.VisibleTabs(), _slide == 1 ? _agents?.Activities ?? Array.Empty<AgentActivity>() : Array.Empty<AgentActivity>());
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -690,7 +721,7 @@ internal sealed partial class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = _settings.Detached && _testSlides == 127 && _testClipboardToggled && !_clipboardListening && _testFocusActions == 7 && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true } && task.Due == DateTime.Today.AddDays(1).AddHours(1).AddMinutes(15);
+            TaskTestSucceeded = _settings.Detached && _testSlides == 127 && _testClipboardToggled && !_clipboardListening && _testFocusActions == 7 && _testAppearanceToggled && _settings.ShowBatteryPercent && _testSizeChanged && _settings.SizePreset == 1 && _testTabToggled && _settings.HiddenTabs.Count == 0 && _testTabMoved && _settings.TabOrder.SequenceEqual(Enumerable.Range(0, 7)) && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true } && task.Due == DateTime.Today.AddDays(1).AddHours(1).AddMinutes(15);
         }
         else SaveTasks();
         CloseComposer();

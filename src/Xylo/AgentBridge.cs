@@ -34,6 +34,10 @@ internal sealed class AgentBridge : IDisposable
                     .OrderByDescending(s => s.Working).ThenByDescending(s => s.Updated).FirstOrDefault();
         }
     }
+    public AgentActivity[] Activities
+    {
+        get { lock (_lock) return _sessions.Values.Where(s => DateTimeOffset.UtcNow - s.Updated < TimeSpan.FromMinutes(30)).OrderByDescending(s => s.Working).ThenByDescending(s => s.Updated).Take(8).ToArray(); }
+    }
     public void Start() => _ = Task.Run(AcceptAsync);
 
     private async Task AcceptAsync()

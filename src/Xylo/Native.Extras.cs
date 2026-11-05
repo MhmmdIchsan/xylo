@@ -4,6 +4,11 @@ namespace Xylo;
 
 internal static partial class Native
 {
+    public delegate bool MonitorEnumProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
+    [DllImport("user32.dll")]
+    public static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
+    [DllImport("shcore.dll")]
+    public static extern int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint x, out uint y);
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool AddClipboardFormatListener(IntPtr hwnd);
     [DllImport("user32.dll")]

@@ -14,7 +14,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, IReadOnlyList<NotificationPreview> notifications, bool notificationsEnabled, bool clipboardEnabled, IReadOnlyList<string> clipboardItems)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, IReadOnlyList<NotificationPreview> notifications, bool notificationsEnabled, bool clipboardEnabled, IReadOnlyList<string> clipboardItems, bool showBatteryPercent, IReadOnlyList<int> visibleTabs, IReadOnlyList<AgentActivity> agents)
     {
         if (media == null && _artData != null) { _artwork?.Dispose(); _artwork = null; _artData = null; }
         canvas.Clear(SKColors.Transparent);
@@ -81,7 +81,15 @@ internal sealed class IslandRenderer : IDisposable
         else if (slide == 4 && media != null)
             Text(canvas, Truncate(media.Title, Math.Max(0, width - 155), 12), left + 52, 26, 12, new SKColor(235, 240, 242));
         else if (slide == 1 && agent != null)
-            CenterText(canvas, Truncate(agent.Agent + (agent.Working ? " working" : " finished"), width - 125, 11), left + width / 2, 26, 11, new SKColor(130, 230, 190));
+        {
+            int working = agents.Count(a => a.Working);
+            string label = Truncate(working > 1 ? $"{working} agents working" : agent.Agent + (agent.Working ? " working" : " finished"), width - 150, 11);
+            _font.Size = 11;
+            float labelWidth = _font.MeasureText(label);
+            float labelX = left + width / 2 - (labelWidth + (agent.Working ? 16 : 0)) / 2;
+            if (agent.Working) DrawLoader(canvas, labelX + 5, 21, seconds);
+            Text(canvas, label, labelX + (agent.Working ? 16 : 0), 26, 11, new SKColor(130, 230, 190));
+        }
         else if (slide == 6 && focus.Active)
             CenterText(canvas, Truncate(focus.Display, width - 125, 12), left + width / 2, 26, 12, new SKColor(130, 230, 190));
         else
@@ -103,7 +111,7 @@ internal sealed class IslandRenderer : IDisposable
                 canvas.DrawArc(ring, (float)(seconds * 120 % 360) - 90, 28, false, _paint);
             }
             _paint.Style = SKPaintStyle.Fill;
-            CenterText(canvas, $"{percent}%", centerX, 23.5f, percent >= 100 ? 6.5f : 7.5f, SKColors.White);
+            if (showBatteryPercent) CenterText(canvas, $"{percent}%", centerX, 23.5f, percent >= 100 ? 6.5f : 7.5f, SKColors.White);
         }
         if (unreadCount > 0 && height < 100 && preview == null && approval == null && notice == null)
             DrawBell(canvas, right - (battery.Percent.HasValue ? 50 : 24), 21);
@@ -220,13 +228,15 @@ internal sealed class IslandRenderer : IDisposable
             else
             {
                 string[] tabs = { "Today", "Agent", "Weather", "To-do", "Music", "Clip", "Focus" };
-                for (int i = 0; i < tabs.Length; i++)
+                float slotWidth = 352f / visibleTabs.Count;
+                for (int i = 0; i < visibleTabs.Count; i++)
                 {
-                    float tabX = left + 24 + i * (352f / 7);
-                    _paint.Color = i == slide ? new SKColor(130, 230, 190, 45) : new SKColor(255, 255, 255, 12);
-                    canvas.DrawRoundRect(new SKRect(tabX, 45, tabX + 47, 81), 8, 8, _paint);
-                    DrawTabIcon(canvas, tabX + 23, 55, i, i == slide);
-                    CenterText(canvas, tabs[i], tabX + 23, 76, 9, i == slide ? new SKColor(130, 230, 190) : new SKColor(190, 200, 200));
+                    int tab = visibleTabs[i];
+                    float tabX = left + 24 + i * slotWidth, center = tabX + (slotWidth - 3) / 2;
+                    _paint.Color = tab == slide ? new SKColor(130, 230, 190, 45) : new SKColor(255, 255, 255, 12);
+                    canvas.DrawRoundRect(new SKRect(tabX, 45, tabX + slotWidth - 3, 81), 8, 8, _paint);
+                    DrawTabIcon(canvas, center, 55, tab, tab == slide);
+                    CenterText(canvas, tabs[tab], center, 76, 9, tab == slide ? new SKColor(130, 230, 190) : new SKColor(190, 200, 200));
                 }
                 if (slide == 0)
                 {
@@ -258,9 +268,17 @@ internal sealed class IslandRenderer : IDisposable
                 else if (slide == 1)
                 {
                     CenterText(canvas, "AI Agent", left + width / 2, 105, 16, SKColors.White);
-                    CenterText(canvas, agent == null ? "No recent agent activity" : Truncate(agent.Agent + (agent.Working ? " · working" : " · finished"), 352, 13), left + width / 2, 132, 13, new SKColor(130, 230, 190));
-                    if (agent != null) CenterText(canvas, Truncate(agent.Project, 352, 12), left + width / 2, 155, 12, new SKColor(160, 169, 179));
-                    CenterText(canvas, "Approval requests appear here automatically", left + width / 2, 204, 11, new SKColor(160, 169, 179));
+                    if (agents.Count == 0) CenterText(canvas, "No recent agent activity", left + width / 2, 135, 13, new SKColor(160, 169, 179));
+                    for (int i = 0; i < Math.Min(3, agents.Count); i++)
+                    {
+                        var item = agents[i];
+                        string name = item.Agent + (item.Working ? " · working" : " · finished");
+                        if (item.Working) DrawLoader(canvas, left + 30, 128 + 23 * i, seconds);
+                        Text(canvas, Truncate(name, 126, 12), left + 43, 132 + 23 * i, 12, new SKColor(130, 230, 190));
+                        Text(canvas, Truncate(item.Project, 200, 11), left + 174, 132 + 23 * i, 11, new SKColor(160, 169, 179));
+                    }
+                    if (agents.Count > 3) Text(canvas, $"+{agents.Count - 3} more", left + 24, 197, 10, new SKColor(160, 169, 179));
+                    else if (agents.Count <= 3) CenterText(canvas, "Approval requests appear automatically", left + width / 2, 207, 10, new SKColor(160, 169, 179));
                 }
                 else if (slide == 2)
                 {
@@ -361,6 +379,15 @@ internal sealed class IslandRenderer : IDisposable
         canvas.DrawRoundRect(new SKRect(x, y, x + width, y + 4), 2, 2, _paint);
         _paint.Color = new SKColor(130, 230, 190);
         canvas.DrawRoundRect(new SKRect(x, y, x + width * Math.Clamp(progress, 0, 1), y + 4), 2, 2, _paint);
+    }
+
+    private void DrawLoader(SKCanvas canvas, float x, float y, double seconds)
+    {
+        var ring = new SKRect(x - 5, y - 5, x + 5, y + 5);
+        _paint.Style = SKPaintStyle.Stroke; _paint.StrokeWidth = 1.5f; _paint.StrokeCap = SKStrokeCap.Round;
+        _paint.Color = new SKColor(130, 230, 190, 45); canvas.DrawOval(ring, _paint);
+        _paint.Color = new SKColor(130, 230, 190); canvas.DrawArc(ring, (float)(seconds * 240 % 360), 105, false, _paint);
+        _paint.Style = SKPaintStyle.Fill;
     }
 
     private void DrawArtwork(SKCanvas canvas, float x, float y, byte[]? bytes)

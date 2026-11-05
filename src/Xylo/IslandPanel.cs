@@ -16,6 +16,9 @@ internal sealed partial class IslandApp
     private bool _testVolumeToggled;
     private bool _testBrightnessToggled;
     private bool _testLyricsToggled;
+    private bool _testAppearanceToggled, _testSizeChanged, _testTabToggled, _testTabMoved;
+    private int _selectedTab;
+    private static readonly string[] TabNames = { "Today", "Agent", "Weather", "To-do", "Music", "Clipboard", "Focus" };
 
     private void ShowMenu()
     {
@@ -83,7 +86,41 @@ internal sealed partial class IslandApp
                 rows.Add(new(_settings.VolumeHudEnabled ? "Volume HUD: On" : "Volume HUD: Off", ToggleVolumeHud));
                 rows.Add(new(_settings.BrightnessHudEnabled ? "Brightness HUD: On" : "Brightness HUD: Off", ToggleBrightnessHud));
                 rows.Add(new(_settings.LyricsEnabled ? "Lyrics: On" : "Lyrics: Off", ToggleLyrics));
+                rows.Add(new("Appearance  >", () => NavigatePanel(PanelPage.Appearance)));
                 rows.Add(new("Quit Xylo", () => DestroyWindow(_hwnd)));
+                break;
+            case PanelPage.Appearance:
+                title = "Appearance";
+                rows.Add(new(_settings.ShowBatteryPercent ? "Battery percentage: On" : "Battery percentage: Off", () =>
+                { _settings.ShowBatteryPercent = !_settings.ShowBatteryPercent; if (_taskTest && !_settings.ShowBatteryPercent) _testAppearanceToggled = true; SaveAppearance(); }));
+                rows.Add(new(_settings.Detached ? "Position: Floating" : "Position: Attached", TogglePosition));
+                rows.Add(new("Size: " + new[] { "Small", "Normal", "Large" }[_settings.SizePreset], () =>
+                { _settings.SizePreset = (_settings.SizePreset + 1) % 3; if (_taskTest) _testSizeChanged = true; SaveAppearance(); BuildSurface(); UpdateTarget(); }));
+                var displays = GetDisplays();
+                rows.Add(new($"Display: {Math.Clamp(_settings.MonitorIndex, 0, displays.Count - 1) + 1} / {displays.Count}", () =>
+                { _settings.MonitorIndex = (Math.Clamp(_settings.MonitorIndex, 0, displays.Count - 1) + 1) % displays.Count; SaveAppearance(); BuildSurface(); UpdateTarget(); }));
+                rows.Add(new("Tabs: visibility and order  >", () => NavigatePanel(PanelPage.Tabs)));
+                break;
+            case PanelPage.Tabs:
+                title = "Arrange tabs";
+                foreach (int id in _settings.TabOrder)
+                {
+                    int tab = id;
+                    rows.Add(new((!_settings.HiddenTabs.Contains(tab) ? "[shown] " : "[hidden] ") + TabNames[tab] + "  >", () => { _selectedTab = tab; NavigatePanel(PanelPage.TabDetails); }));
+                }
+                break;
+            case PanelPage.TabDetails:
+                title = TabNames[_selectedTab];
+                if (_selectedTab == 0) rows.Add(new("Today always remains visible", () => { }));
+                else rows.Add(new(_settings.HiddenTabs.Contains(_selectedTab) ? "Show tab" : "Hide tab", () =>
+                {
+                    if (!_settings.HiddenTabs.Remove(_selectedTab)) _settings.HiddenTabs.Add(_selectedTab);
+                    if (_taskTest && _settings.HiddenTabs.Contains(_selectedTab)) _testTabToggled = true;
+                    if (_settings.HiddenTabs.Contains(_slide)) { _slide = 0; _settings.DashboardSlide = 0; SyncAgentAnimation(); UpdateTarget(); }
+                    SaveAppearance();
+                }));
+                rows.Add(new("Move left", () => MoveTab(-1)));
+                rows.Add(new("Move right", () => MoveTab(1)));
                 break;
             case PanelPage.Tasks:
                 title = "Tasks";
@@ -170,7 +207,7 @@ internal sealed partial class IslandApp
         else if (y is >= 325 and <= 365)
         {
             if (x is >= 24 and <= 100 && _panel != PanelPage.Home)
-                NavigatePanel(_panel == PanelPage.TaskDetails ? PanelPage.Tasks : PanelPage.Home);
+                NavigatePanel(_panel == PanelPage.TaskDetails ? PanelPage.Tasks : _panel == PanelPage.TabDetails ? PanelPage.Tabs : _panel == PanelPage.Tabs ? PanelPage.Appearance : PanelPage.Home);
             else if (x is >= 108 and <= 174) _panelPage = Math.Max(0, _panelPage - 1);
             else if (x is >= 180 and <= 246) _panelPage++;
             else if (x is >= 260 and <= 376) ClosePanel();
@@ -193,8 +230,24 @@ internal sealed partial class IslandApp
         try { _settings.Save(); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { _settings.Detached = previous; ShowPrompt("Configuration", "Could not save Xylo configuration."); }
-        _y = _settings.Detached ? (int)(12 * _scale) : 0;
+        _y = _displayBounds.top + (_settings.Detached ? (int)(12 * _scale) : 0);
         _dirty = true;
+    }
+
+    private void SaveAppearance()
+    {
+        try { _settings.Save(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { ShowPrompt("Appearance", "Could not save display settings."); }
+        InvalidatePanel();
+    }
+
+    private void MoveTab(int direction)
+    {
+        int index = _settings.TabOrder.IndexOf(_selectedTab), next = index + direction;
+        if (index < 0 || next < 0 || next >= _settings.TabOrder.Count) return;
+        (_settings.TabOrder[index], _settings.TabOrder[next]) = (_settings.TabOrder[next], _settings.TabOrder[index]);
+        if (_taskTest) _testTabMoved = true;
+        SaveAppearance();
     }
 
     private void ToggleNotifications()

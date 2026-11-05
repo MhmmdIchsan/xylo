@@ -32,6 +32,7 @@ try:
         else:
             raise AssertionError("Notch animation did not settle")
         canvas_x = (700 - width) / 2 + x - 20
+        scale = u.SendMessageW(hwnd, 0x801C, 0, 0) / 1000
         u.SendMessageW(hwnd, 0x0202, 0, int(canvas_x * scale) | (int(y * scale) << 16))
         time.sleep(0.3)
     for x in (69, 119, 169, 219, 269, 319, 369):
@@ -63,7 +64,21 @@ try:
     click(70, 247)  # Disable again
     click(70, 285)  # Disable lyrics
     click(70, 285)  # Enable lyrics again
-    click(160, 345) # Return to first page
+    click(230, 345) # Appearance is on the third page
+    click(70, 95)   # Appearance
+    click(70, 95)   # Hide battery percentage
+    click(70, 95)   # Restore it
+    for _ in range(3):
+        click(70, 171) # Cycle through size presets back to normal
+    click(70, 247)  # Arrange tabs
+    click(70, 133)  # Agent tab
+    click(70, 95)   # Hide Agent
+    click(70, 95)   # Show Agent
+    click(70, 133)  # Move left
+    click(70, 171)  # Move right
+    click(60, 345)  # Back to tabs
+    click(60, 345)  # Back to appearance
+    click(60, 345)  # Back to controls
     click(70, 95)   # Toggle position without changing the user's settings
     click(70, 247)  # Controls -> Tasks
     click(70, 95)   # Tasks -> Add task

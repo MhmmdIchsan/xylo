@@ -2,6 +2,28 @@ namespace Xylo;
 
 internal static class SelfTest
 {
+    private static bool TestAgentAnimation()
+    {
+        var agent = new AgentActivity("Codex", "test", "test", true, DateTimeOffset.UtcNow);
+        using var first = new SkiaSharp.SKBitmap(700, 420);
+        using var second = new SkiaSharp.SKBitmap(700, 420);
+        using var renderer = new IslandRenderer();
+        void Render(SkiaSharp.SKBitmap bitmap, double seconds)
+        {
+            using var canvas = new SkiaSharp.SKCanvas(bitmap);
+            renderer.Draw(canvas, 1, 400, 236, false, new BatteryStatus(null, false, null), seconds, -1,
+                null, null, false, new FocusTimer(), null, 0, agent, null, null, Array.Empty<TaskItem>(), 1,
+                null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true,
+                Enumerable.Range(0, 7).ToArray(), new[] { agent });
+            canvas.Flush();
+        }
+        Render(first, 0); Render(second, 0.5);
+        for (int y = 121; y <= 135; y++)
+            for (int x = 173; x <= 187; x++)
+                if (first.GetPixel(x, y) != second.GetPixel(x, y)) return true;
+        return false;
+    }
+
     private static bool TestMediaRendering()
     {
         using var cover = new SkiaSharp.SKBitmap(4, 4);
@@ -15,7 +37,7 @@ internal static class SelfTest
         renderer.Draw(canvas, 1, 660, 236, false, new BatteryStatus(null, false, null), 0, -1,
             media, new LyricsSnapshot("test", Array.Empty<LyricLine>(), "one\ntwo", "missing"), true,
             new FocusTimer(), null, 0, null, null, null, Array.Empty<TaskItem>(), 4,
-            null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>());
+            null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true, Enumerable.Range(0, 7).ToArray(), Array.Empty<AgentActivity>());
         canvas.Flush();
         var pixel = bitmap.GetPixel(89, 139);
         return pixel.Red > 180 && pixel.Green < 60;
@@ -88,7 +110,7 @@ internal static class SelfTest
         var muted = VolumeHudService.Preview(0.8f, true);
         bool staysLocked = !review.CanApprove;
         review.Next();
-        bool valid = TestMediaRendering() && lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
+        bool valid = TestMediaRendering() && TestAgentAnimation() && lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
             && synced.Current(1) == "♪" && synced.Current(3) == "first" && synced.Current(8) == "second"
             && plain.Current(0) == "one" && plain.Visible(0).SequenceEqual(new[] { "one", "two", "three" })
             && ReferenceEquals(plain.Visible(0), plain.Visible(5)) && duplicateTimes.Current(2) == "second" && duplicateTimes.Current(4) == "♪" && duplicateTimes.Visible(2)[0] == "second"
