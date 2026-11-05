@@ -9,6 +9,7 @@ The first desktop prototype is implemented. It currently provides the notch shel
 - Native topmost notch attached to the primary display's top edge, without taking keyboard focus on hover.
 - Hover to expand; move away to collapse after a brief grace period.
 - Composition-paced spring animation, fading content, and transparent hit testing.
+- Circular battery percentage indicator with a moving charge highlight; unavailable battery readings are hidden.
 - System tray menu to expand/collapse or quit.
 - Configuration in the right-click menu switches between an attached notch and a floating island; the choice is saved locally.
 - `Ctrl+Alt+X` global toggle shortcut, when available.

@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -46,7 +46,27 @@ internal sealed class IslandRenderer : IDisposable
         _paint.Color = new SKColor(130, 230, 190);
         canvas.DrawCircle(left + 24, 25, 4, _paint);
         Text(canvas, "Xylo", left + 38, 30, 15, SKColors.White);
-        Text(canvas, "Ready", left + width - 58, 29, 12, new SKColor(160, 169, 179));
+        if (battery.Percent is int percent)
+        {
+            float centerX = right - 23;
+            var ring = new SKRect(centerX - 10, 11, centerX + 10, 31);
+            _paint.Style = SKPaintStyle.Stroke;
+            _paint.StrokeWidth = 2.5f;
+            _paint.StrokeCap = SKStrokeCap.Round;
+            _paint.Color = new SKColor(255, 255, 255, 35);
+            canvas.DrawOval(ring, _paint);
+            _paint.Color = percent <= 20 ? new SKColor(255, 113, 113) : new SKColor(130, 230, 190);
+            canvas.DrawArc(ring, -90, Math.Max(0.01f, percent * 3.6f), false, _paint);
+            if (battery.Charging)
+            {
+                _paint.Color = SKColors.White.WithAlpha(170);
+                canvas.DrawArc(ring, (float)(seconds * 120 % 360) - 90, 28, false, _paint);
+            }
+            _paint.Style = SKPaintStyle.Fill;
+            Text(canvas, $"{percent}%", centerX - 39, 26, 11, new SKColor(200, 209, 213));
+            if (battery.Charging) Text(canvas, "+", centerX - 3.5f, 25, 11, SKColors.White);
+        }
+        else Text(canvas, "Ready", right - 58, 29, 12, new SKColor(160, 169, 179));
 
         float reveal = Math.Clamp((height - 55) / 165, 0, 1);
         reveal = reveal * reveal * (3 - 2 * reveal);

@@ -11,7 +11,7 @@ internal sealed class IslandApp : IDisposable
 {
     public const float CanvasWidth = 440;
     private const float CanvasHeight = 250;
-    private const uint CollapseTimer = 1, SmokeTimer = 2;
+    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4;
     private readonly WndProc _windowProcedure;
     private readonly IslandRenderer _renderer = new();
     private readonly Spring _width = new(initial: 180);
@@ -31,6 +31,7 @@ internal sealed class IslandApp : IDisposable
     private long _renderCount;
     private PerformanceSample? _before, _beforeIdle;
     private long _idleRenderStart;
+    private BatteryStatus _battery;
 
     public IslandApp(bool smokeTest)
     {
@@ -55,6 +56,8 @@ internal sealed class IslandApp : IDisposable
             windowClass.lpszClassName, "Xylo", WS_POPUP, 0, 0, 1, 1,
             IntPtr.Zero, IntPtr.Zero, windowClass.hInstance, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new Win32Exception();
+        RefreshBattery();
+        if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BatteryTimer, 60000, IntPtr.Zero);
         BuildSurface();
         Draw();
         ShowWindow(_hwnd, SW_SHOWNOACTIVATE);
@@ -161,7 +164,12 @@ internal sealed class IslandApp : IDisposable
                         SetExpanded(false);
                 }
                 else if (_smokeTest && wParam.ToInt64() == SmokeTimer) SmokeTick();
+                else if (wParam.ToInt64() == BatteryTimer) RefreshBattery();
+                else if (wParam.ToInt64() == ChargeAnimationTimer) _dirty = true;
                 return IntPtr.Zero;
+            case 0x0218: // WM_POWERBROADCAST
+                RefreshBattery();
+                return new IntPtr(1);
             case WM_DISPLAYCHANGE:
             case WM_DPICHANGED:
                 BuildSurface();
@@ -226,7 +234,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -236,6 +244,14 @@ internal sealed class IslandApp : IDisposable
             ref source, 0, ref blend, ULW_ALPHA)) throw new Win32Exception();
         _renderCount++;
         _dirty = false;
+    }
+
+    private void RefreshBattery()
+    {
+        _battery = BatteryStatus.Read();
+        if (!_smokeTest && _battery.Charging) SetTimer(_hwnd, (UIntPtr)ChargeAnimationTimer, 50, IntPtr.Zero);
+        else KillTimer(_hwnd, (UIntPtr)ChargeAnimationTimer);
+        _dirty = true;
     }
 
     private void AddTrayIcon()
