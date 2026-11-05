@@ -107,13 +107,33 @@ internal sealed class IslandRenderer : IDisposable
                 string elapsed = TimeSpan.FromSeconds(media.CurrentPosition).ToString(@"m\:ss");
                 string total = TimeSpan.FromSeconds(Math.Max(0, media.Duration)).ToString(@"m\:ss");
                 Text(canvas, $"{elapsed} / {total}", left + 24, 145, 12, new SKColor(160, 169, 179));
-                Text(canvas, "|◀", left + 133, 208, 16, SKColors.White);
-                Text(canvas, media.Playing ? "Ⅱ" : "▶", left + 186, 208, 17, SKColors.White);
-                Text(canvas, "▶|", left + 232, 208, 16, SKColors.White);
+                DrawTransport(canvas, left + 145, 201, -1, false, true);
+                DrawTransport(canvas, left + 195, 201, 1, media.Playing, false);
+                DrawTransport(canvas, left + 245, 201, 1, false, true);
             }
             canvas.Restore();
         }
         canvas.Restore();
+    }
+
+    private void DrawTransport(SKCanvas canvas, float x, float y, int direction, bool pause, bool skip)
+    {
+        _paint.Color = SKColors.White;
+        _paint.Style = SKPaintStyle.Fill;
+        if (pause)
+        {
+            canvas.DrawRoundRect(new SKRect(x - 5, y - 7, x - 1, y + 7), 1, 1, _paint);
+            canvas.DrawRoundRect(new SKRect(x + 1, y - 7, x + 5, y + 7), 1, 1, _paint);
+            return;
+        }
+        using var path = new SKPath();
+        path.MoveTo(x + direction * 6, y);
+        path.LineTo(x - direction * 5, y - 7);
+        path.LineTo(x - direction * 5, y + 7);
+        path.Close();
+        canvas.DrawPath(path, _paint);
+        if (skip)
+            canvas.DrawRect(new SKRect(x + direction * 7 - 1, y - 7, x + direction * 7 + 1, y + 7), _paint);
     }
 
     private string Truncate(string value, float maxWidth, float size)
