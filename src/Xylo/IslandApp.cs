@@ -11,7 +11,7 @@ internal sealed class IslandApp : IDisposable
 {
     public const float CanvasWidth = 440;
     private const float CanvasHeight = 250;
-    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4;
+    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6;
     private readonly WndProc _windowProcedure;
     private readonly IslandRenderer _renderer = new();
     private readonly Spring _width = new(initial: 180);
@@ -32,6 +32,7 @@ internal sealed class IslandApp : IDisposable
     private PerformanceSample? _before, _beforeIdle;
     private long _idleRenderStart;
     private BatteryStatus _battery;
+    private double _blinkStarted = -1;
 
     public IslandApp(bool smokeTest)
     {
@@ -58,6 +59,7 @@ internal sealed class IslandApp : IDisposable
         if (_hwnd == IntPtr.Zero) throw new Win32Exception();
         RefreshBattery();
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BatteryTimer, 60000, IntPtr.Zero);
+        if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BlinkTimer, 8000, IntPtr.Zero);
         BuildSurface();
         Draw();
         ShowWindow(_hwnd, SW_SHOWNOACTIVATE);
@@ -127,6 +129,7 @@ internal sealed class IslandApp : IDisposable
                 float y = ((short)((lParam.ToInt64() >> 16) & 0xffff) - _y) / _scale;
                 return new IntPtr(IsInsidePill(x, y) ? HTCLIENT : HTTRANSPARENT);
             case WM_MOUSEMOVE:
+                if (_smokeTest) return IntPtr.Zero;
                 if (!_trackingMouse)
                 {
                     var tracking = new TRACKMOUSEEVENT
@@ -139,6 +142,7 @@ internal sealed class IslandApp : IDisposable
                 SetExpanded(true);
                 return IntPtr.Zero;
             case WM_MOUSELEAVE:
+                if (_smokeTest) return IntPtr.Zero;
                 _trackingMouse = false;
                 // Brief grace period prevents flicker while crossing an animated edge.
                 if (!_menuOpen) SetTimer(hwnd, (UIntPtr)CollapseTimer, 180, IntPtr.Zero);
@@ -166,6 +170,20 @@ internal sealed class IslandApp : IDisposable
                 else if (_smokeTest && wParam.ToInt64() == SmokeTimer) SmokeTick();
                 else if (wParam.ToInt64() == BatteryTimer) RefreshBattery();
                 else if (wParam.ToInt64() == ChargeAnimationTimer) _dirty = true;
+                else if (wParam.ToInt64() == BlinkTimer)
+                {
+                    _blinkStarted = _clock.Elapsed.TotalSeconds;
+                    SetTimer(hwnd, (UIntPtr)BlinkFrameTimer, 30, IntPtr.Zero);
+                }
+                else if (wParam.ToInt64() == BlinkFrameTimer)
+                {
+                    if (_clock.Elapsed.TotalSeconds - _blinkStarted >= 0.3)
+                    {
+                        _blinkStarted = -1;
+                        KillTimer(hwnd, (UIntPtr)BlinkFrameTimer);
+                    }
+                    _dirty = true;
+                }
                 return IntPtr.Zero;
             case 0x0218: // WM_POWERBROADCAST
                 RefreshBattery();
@@ -234,7 +252,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();

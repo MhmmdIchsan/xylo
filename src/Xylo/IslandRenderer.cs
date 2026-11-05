@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -44,7 +44,10 @@ internal sealed class IslandRenderer : IDisposable
         canvas.ClipPath(_outline, SKClipOperation.Intersect, true);
 
         _paint.Color = new SKColor(130, 230, 190);
-        canvas.DrawCircle(left + 24, 25, 4, _paint);
+        float blink = blinkStarted < 0 ? 0 : (float)Math.Sin(Math.Clamp((seconds - blinkStarted) / 0.3, 0, 1) * Math.PI);
+        float eyeHeight = 4.8f - blink * 4.0f;
+        canvas.DrawRoundRect(new SKRect(left + 17, 21 - eyeHeight, left + 23, 21 + eyeHeight), 3, 3, _paint);
+        canvas.DrawRoundRect(new SKRect(left + 26, 21 - eyeHeight, left + 32, 21 + eyeHeight), 3, 3, _paint);
         Text(canvas, "Xylo", left + 38, 30, 15, SKColors.White);
         if (battery.Percent is int percent)
         {
