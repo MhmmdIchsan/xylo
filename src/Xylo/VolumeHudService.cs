@@ -6,12 +6,14 @@ namespace Xylo;
 internal sealed class VolumeHudService : IDisposable
 {
     private readonly object _gate = new();
+    private readonly object _volumeGate = new();
     private readonly Action<NotificationPreview> _received;
     private readonly VolumeCallback _volumeCallback;
     private readonly DeviceCallback _deviceCallback;
     private IMMDeviceEnumerator? _enumerator;
     private IAudioEndpointVolume? _endpoint;
     private bool _registered;
+    private float? _previousVolume;
     private volatile bool _disposed;
     private volatile bool _initialized;
     public bool Initialized => _initialized;
@@ -47,6 +49,7 @@ internal sealed class VolumeHudService : IDisposable
 
     private void RebindLocked()
     {
+        lock (_volumeGate) _previousVolume = null;
         if (_endpoint != null)
         {
             try { _endpoint.UnregisterControlChangeNotify(_volumeCallback); } catch { }
@@ -59,21 +62,31 @@ internal sealed class VolumeHudService : IDisposable
             Guid iid = typeof(IAudioEndpointVolume).GUID;
             if (device.Activate(ref iid, 0x17, IntPtr.Zero, out var obj) < 0) return;
             _endpoint = (IAudioEndpointVolume)obj;
+            if (_endpoint.GetMasterVolumeLevelScalar(out float initialVolume) >= 0)
+                lock (_volumeGate) _previousVolume = initialVolume;
             if (_endpoint.RegisterControlChangeNotify(_volumeCallback) < 0)
             { Marshal.ReleaseComObject(_endpoint); _endpoint = null; }
         }
         finally { Marshal.ReleaseComObject(device); }
     }
 
-    internal static NotificationPreview Preview(float volume, bool muted)
+    internal static NotificationPreview Preview(float volume, bool muted, float? previous = null)
     {
         float value = muted ? 0 : Math.Clamp(volume, 0, 1);
-        return new NotificationPreview("System", muted ? "Muted" : "Volume", $"{Math.Round(value * 100):0}%", value, true, "volume");
+        string title = muted ? "Muted" : previous == null || Math.Abs(volume - previous.Value) < 0.001f ? "Volume" : volume > previous ? "Volume up" : "Volume down";
+        return new NotificationPreview("System", title, $"{Math.Round(value * 100):0}%", value, true, "volume");
     }
 
     private void Publish(float volume, bool muted)
     {
-        if (!_disposed) _received(Preview(volume, muted));
+        NotificationPreview preview;
+        lock (_volumeGate)
+        {
+            if (_disposed) return;
+            preview = Preview(volume, muted, _previousVolume);
+            _previousVolume = volume;
+        }
+        _received(preview);
     }
 
     public void Dispose()
@@ -123,6 +136,11 @@ internal sealed class VolumeHudService : IDisposable
     {
         [PreserveSig] int RegisterControlChangeNotify(IAudioEndpointVolumeCallback callback);
         [PreserveSig] int UnregisterControlChangeNotify(IAudioEndpointVolumeCallback callback);
+        [PreserveSig] int GetChannelCount(out uint count);
+        [PreserveSig] int SetMasterVolumeLevel(float level, ref Guid context);
+        [PreserveSig] int SetMasterVolumeLevelScalar(float level, ref Guid context);
+        [PreserveSig] int GetMasterVolumeLevel(out float level);
+        [PreserveSig] int GetMasterVolumeLevelScalar(out float level);
     }
     [ComVisible(true), Guid("657804FA-D6AD-4496-8A60-352752AF4F89"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IAudioEndpointVolumeCallback { [PreserveSig] int OnNotify(IntPtr data); }

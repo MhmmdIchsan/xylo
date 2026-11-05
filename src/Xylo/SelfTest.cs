@@ -79,6 +79,7 @@ internal static class SelfTest
             && startsLocked && staysLocked && review.CanApprove && ApprovalReview.SafeDisplay("a\u202Eb\t") == "a\\u202Eb\\u0009"
             && lowBattery?.Title == "Battery low" && plugged?.Title == "Power connected" && unknownPower == null
             && wifiConnected?.Title == "Wi-Fi connected" && wifiSame == null && muted.Title == "Muted" && muted.Progress == 0
+            && VolumeHudService.Preview(0.7f, false, 0.5f).Title == "Volume up" && VolumeHudService.Preview(0.4f, false, 0.5f).Title == "Volume down"
             && BrightnessHudService.Preview(55).Progress == 0.55f;
         return valid ? 0 : 1;
     }

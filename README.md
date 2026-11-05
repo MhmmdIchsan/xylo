@@ -11,8 +11,8 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Composition-paced spring animation, fading content, and transparent hit testing.
 - Circular battery percentage indicator with a moving charge highlight; unavailable battery readings are hidden.
 - Optional battery alerts for low or critical charge and power connection changes.
-- Optional Wi-Fi and Bluetooth connection alerts. Device names and Wi-Fi SSIDs depend on Windows permissions and device support.
-- Optional volume HUD using Windows Core Audio events.
+- Wi-Fi and Bluetooth connection alerts, configurable in the notch. Device names and Wi-Fi SSIDs depend on Windows permissions and device support.
+- Volume up/down HUD with a level bar using Windows Core Audio events, configurable in the notch.
 - Optional brightness HUD using Windows display events; availability depends on the display and driver.
 - Minimal animated eyes blink periodically without a continuously running animation loop.
 - Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.

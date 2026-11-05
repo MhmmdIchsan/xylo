@@ -18,8 +18,8 @@ internal sealed class Settings
     public bool NotificationsEnabled { get; set; }
     public bool WeatherEnabled { get; set; }
     public bool BatteryAlertsEnabled { get; set; } = true;
-    public bool ConnectivityAlertsEnabled { get; set; }
-    public bool VolumeHudEnabled { get; set; }
+    public bool ConnectivityAlertsEnabled { get; set; } = true;
+    public bool VolumeHudEnabled { get; set; } = true;
     public bool BrightnessHudEnabled { get; set; }
     public bool LyricsEnabled { get; set; } = true;
     public List<TaskItem> Tasks { get; set; } = new();

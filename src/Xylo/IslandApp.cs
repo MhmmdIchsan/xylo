@@ -64,7 +64,7 @@ internal sealed partial class IslandApp : IDisposable
     {
         _smokeTest = smokeTest;
         _taskTest = taskTest;
-        _settings = smokeTest || taskTest ? new Settings { Transient = true } : Settings.Load();
+        _settings = smokeTest || taskTest ? new Settings { Transient = true, ConnectivityAlertsEnabled = false, VolumeHudEnabled = false } : Settings.Load();
         _windowProcedure = WindowProcedure;
     }
 
