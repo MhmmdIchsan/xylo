@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -120,7 +120,7 @@ internal sealed class IslandRenderer : IDisposable
         }
         else if (media != null && height < 110 && height > 54)
         {
-            string line = lyrics?.Current(media.CurrentPosition) ?? "Looking for lyrics…";
+            string line = lyrics?.Current(media.CurrentPosition) ?? (lyricsEnabled ? "Looking for lyrics…" : "Lyrics off");
             Text(canvas, Truncate(line, width - 48, 12), left + 24, 52, 12, new SKColor(130, 230, 190));
         }
 
@@ -223,7 +223,7 @@ internal sealed class IslandRenderer : IDisposable
                 Text(canvas, $"{elapsed} / {total}", left + 24, 118, 11, new SKColor(160, 169, 179));
                 if (focus.Active)
                     Text(canvas, focus.Display, right - 78, 118, 11, new SKColor(130, 230, 190));
-                string[] visible = lyrics?.Visible(media.CurrentPosition) ?? new[] { "Looking for lyrics…" };
+                string[] visible = lyrics?.Visible(media.CurrentPosition) ?? new[] { lyricsEnabled ? "Looking for lyrics…" : "Lyrics off" };
                 for (int i = 0; i < Math.Min(3, visible.Length); i++)
                     Text(canvas, Truncate(visible[i], width - 48, 12), left + 24, 140 + 17 * i, 12,
                         i == 0 ? new SKColor(130, 230, 190) : new SKColor(160, 169, 179));

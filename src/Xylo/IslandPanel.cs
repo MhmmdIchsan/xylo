@@ -15,6 +15,7 @@ internal sealed partial class IslandApp
     private bool _testConnectivityToggled;
     private bool _testVolumeToggled;
     private bool _testBrightnessToggled;
+    private bool _testLyricsToggled;
 
     private void ShowMenu()
     {
@@ -81,6 +82,7 @@ internal sealed partial class IslandApp
                 rows.Add(new(_settings.ConnectivityAlertsEnabled ? "Connectivity alerts: On" : "Connectivity alerts: Off", ToggleConnectivity));
                 rows.Add(new(_settings.VolumeHudEnabled ? "Volume HUD: On" : "Volume HUD: Off", ToggleVolumeHud));
                 rows.Add(new(_settings.BrightnessHudEnabled ? "Brightness HUD: On" : "Brightness HUD: Off", ToggleBrightnessHud));
+                rows.Add(new(_settings.LyricsEnabled ? "Lyrics: On" : "Lyrics: Off", ToggleLyrics));
                 rows.Add(new("Quit Xylo", () => DestroyWindow(_hwnd)));
                 break;
             case PanelPage.Tasks:
@@ -341,5 +343,30 @@ internal sealed partial class IslandApp
     {
         Interlocked.Exchange(ref _pendingHud, preview);
         PostMessage(_hwnd, HudMessage, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    private void ToggleLyrics()
+    {
+        bool enabled = !_settings.LyricsEnabled;
+        if (_taskTest && !enabled) _testLyricsToggled = true;
+        _settings.LyricsEnabled = enabled;
+        try { _settings.Save(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _settings.LyricsEnabled = !enabled;
+            ShowPrompt("Lyrics", "Could not save the lyrics setting.");
+            return;
+        }
+        if (enabled) StartLyrics();
+        else { _lyrics?.Dispose(); _lyrics = null; }
+        InvalidatePanel();
+        _dirty = true;
+    }
+
+    private void StartLyrics()
+    {
+        _lyrics?.Dispose();
+        _lyrics = new LyricsService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
+        _lyrics.Update(_media?.Snapshot);
     }
 }

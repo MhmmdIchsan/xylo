@@ -36,6 +36,8 @@ try:
     click(70, 209)  # Disable again
     click(70, 247)  # Enable brightness HUD
     click(70, 247)  # Disable again
+    click(70, 285)  # Disable lyrics
+    click(70, 285)  # Enable lyrics again
     click(160, 345) # Return to first page
     click(70, 95)   # Toggle position without changing the user's settings
     click(70, 247)  # Controls -> Tasks

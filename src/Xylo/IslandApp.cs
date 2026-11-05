@@ -90,7 +90,7 @@ internal sealed partial class IslandApp : IDisposable
             if (_settings.NotificationsEnabled) _notifications.Start(false);
             _agents = new AgentBridge(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _agents.Start();
-            _lyrics = new LyricsService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
+            if (_settings.LyricsEnabled) StartLyrics();
             _media = new MediaService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _media.Start();
             if (_settings.WeatherEnabled) StartWeather();
@@ -473,7 +473,7 @@ internal sealed partial class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done), _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done), _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -608,7 +608,7 @@ internal sealed partial class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = _settings.Detached && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
+            TaskTestSucceeded = _settings.Detached && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
         }
         else SaveTasks();
         CloseComposer();

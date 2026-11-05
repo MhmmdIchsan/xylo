@@ -17,6 +17,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Minimal animated eyes blink periodically without a continuously running animation loop.
 - Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.
 - Shows the current synchronized lyric line in the compact notch and upcoming lines when expanded. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.
+- Lyrics can be disabled in the notch controls to stop lyric requests while keeping media controls available.
 - Optional clipboard history in the notch controls: enable explicitly, then select a recent text item to copy it. History holds up to 20 entries in memory and is cleared on exit or when disabled. Clipboard entries may contain sensitive information.
 - Optional Windows notification previews can be enabled from the notch controls after granting Windows access. Availability depends on Windows permission and package identity; previews mirror content supplied by the originating app and may contain sensitive information.
 - Focus, short break and long break timers, with pause/resume controls inside the notch.
