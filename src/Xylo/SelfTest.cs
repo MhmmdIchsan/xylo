@@ -180,7 +180,16 @@ internal static class SelfTest
         var limits = CodexLimitService.Parse(limitsJson.RootElement);
         bool staysLocked = !review.CanApprove;
         review.Next();
-        bool valid = TestMediaRendering() && TestAgentAnimation() && TestMascotTransitions() && lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
+        var due = new DateTime(2026, 1, 1, 10, 0, 0);
+        var reminder = new TaskItem { Title = "test", Due = due, HasTime = true };
+        bool reminders = !IslandApp.ShouldRemind(reminder, due.AddSeconds(-1)) && IslandApp.ShouldRemind(reminder, due);
+        reminder.RemindedDue = due;
+        reminders &= !IslandApp.ShouldRemind(reminder, due.AddDays(1));
+        reminder.RemindedDue = null; reminder.Done = true;
+        reminders &= !IslandApp.ShouldRemind(reminder, due);
+        reminder.Done = false; reminder.HasTime = false;
+        reminders &= !IslandApp.ShouldRemind(reminder, due.Date.AddHours(8)) && IslandApp.ShouldRemind(reminder, due.Date.AddHours(9));
+        bool valid = reminders && TestMediaRendering() && TestAgentAnimation() && TestMascotTransitions() && lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
             && synced.Current(1) == "♪" && synced.Current(3) == "first" && synced.Current(8) == "second"
             && plain.Current(0) == "one" && plain.Visible(0).SequenceEqual(new[] { "one", "two", "three" })
             && ReferenceEquals(plain.Visible(0), plain.Visible(5)) && duplicateTimes.Current(2) == "second" && duplicateTimes.Current(4) == "♪" && duplicateTimes.Visible(2)[0] == "second"

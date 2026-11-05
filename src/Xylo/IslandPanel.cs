@@ -87,6 +87,7 @@ internal sealed partial class IslandApp
                 rows.Add(new(_settings.BrightnessHudEnabled ? "Brightness HUD: On" : "Brightness HUD: Off", ToggleBrightnessHud));
                 rows.Add(new(_settings.LyricsEnabled ? "Lyrics: On" : "Lyrics: Off", ToggleLyrics));
                 rows.Add(new("Appearance  >", () => NavigatePanel(PanelPage.Appearance)));
+                rows.Add(new("Settings window  >", OpenSettingsWindow));
                 rows.Add(new("Quit Xylo", () => DestroyWindow(_hwnd)));
                 break;
             case PanelPage.Appearance:

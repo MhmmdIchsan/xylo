@@ -153,7 +153,7 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, Truncate(preview.IsHud ? preview.Title : NotificationService.SourceLabel(preview), Math.Max(0, width - 155), 12), left + (preview.IsHud ? 52 : 78), 26, 12, SKColors.White);
         }
         else if (slide == 4 && media != null)
-            Text(canvas, Truncate(media.Title, Math.Max(0, width - 155), 12), left + 52, 26, 12, new SKColor(235, 240, 242));
+            CenterText(canvas, Truncate(string.IsNullOrWhiteSpace(media.Artist) ? media.Title : media.Title + " ? " + media.Artist, Math.Max(0, width - 140), 11), left + width / 2, 26, 11, new SKColor(235, 240, 242));
         else if (slide == 1 && agent != null)
         {
             int working = agents.Count(a => a.Working);
@@ -181,7 +181,15 @@ internal sealed class IslandRenderer : IDisposable
                 canvas.DrawArc(ring, (float)(seconds * 120 % 360) - 90, 28, false, _paint);
             }
             _paint.Style = SKPaintStyle.Fill;
-            if (showBatteryPercent) CenterText(canvas, $"{percent}%", centerX, 23.5f, percent >= 100 ? 6.5f : 7.5f, SKColors.White);
+            if (battery.Charging)
+            {
+                using var bolt = new SKPath();
+                float bx = centerX + (showBatteryPercent ? 3 : 0);
+                bolt.MoveTo(bx + 1, 14); bolt.LineTo(bx - 3, 21); bolt.LineTo(bx, 21);
+                bolt.LineTo(bx - 1, 28); bolt.LineTo(bx + 4, 19); bolt.LineTo(bx + 1, 19); bolt.Close();
+                _paint.Color = new SKColor(255, 225, 130); canvas.DrawPath(bolt, _paint);
+            }
+            if (showBatteryPercent) CenterText(canvas, $"{percent}%", centerX - (battery.Charging ? 3 : 0), 23.5f, battery.Charging ? 5 : percent >= 100 ? 6.5f : 7.5f, SKColors.White);
         }
         if ((doNotDisturb || unreadCount > 0) && height < 100 && preview == null && approval == null && notice == null)
             DrawBell(canvas, right - (battery.Percent.HasValue ? 50 : 24), 21, doNotDisturb);
@@ -200,7 +208,7 @@ internal sealed class IslandRenderer : IDisposable
         }
         else if (approval == null && notice == null && slide == 4 && media != null && height < 110 && height > 54)
         {
-            string line = string.IsNullOrWhiteSpace(media.Artist) ? "Now playing" : media.Artist;
+            string line = lyricsEnabled ? lyrics?.Current(media.CurrentPosition) ?? "Looking for lyrics?" : "Lyrics off";
             CenterText(canvas, Truncate(line, width - 48, 12), left + width / 2, 52, 12, new SKColor(130, 230, 190));
         }
 
@@ -385,7 +393,7 @@ internal sealed class IslandRenderer : IDisposable
                     for (int i = 0; i < open.Length; i++)
                     {
                         _paint.Style = SKPaintStyle.Stroke; _paint.Color = new SKColor(130, 230, 190); _paint.StrokeWidth = 1.3f;
-                        canvas.DrawCircle(left + 30, 128 + i * 22, 4, _paint); _paint.Style = SKPaintStyle.Fill;
+                        canvas.DrawRoundRect(new SKRect(left + 25, 123 + i * 22, left + 35, 133 + i * 22), 2, 2, _paint); _paint.Style = SKPaintStyle.Fill;
                         Text(canvas, Truncate(open[i].Title, 330, 12), left + 42, 132 + i * 22, 12, new SKColor(220, 230, 230));
                     }
                     DrawButton(canvas, left + 24, 175, 156, 40, "Manage tasks", false);

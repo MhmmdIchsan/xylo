@@ -9,6 +9,7 @@ internal sealed class TaskItem
     public DateTime? Due { get; set; }
     public bool HasTime { get; set; }
     public bool Done { get; set; }
+    public DateTime? RemindedDue { get; set; }
 }
 
 internal sealed class Settings

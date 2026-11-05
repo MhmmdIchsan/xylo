@@ -117,10 +117,10 @@ internal sealed partial class IslandApp : IDisposable
             if (_settings.BrightnessHudEnabled) StartBrightnessHud();
         }
         RefreshBattery();
-        if (!_smokeTest && !_taskTest) RefreshUserIdle();
+        if (!_smokeTest && !_taskTest) { RefreshUserIdle(); CheckTaskReminders(); }
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BatteryTimer, 60000, IntPtr.Zero);
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BlinkTimer, 8000, IntPtr.Zero);
-        if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)ClockTimer, 60000, IntPtr.Zero);
+        if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)ClockTimer, _slide == 4 && _settings.LyricsEnabled ? 1000u : 60000u, IntPtr.Zero);
         if (!_smokeTest && !_taskTest) SetTimer(_hwnd, (UIntPtr)UserIdleTimer, 2000, IntPtr.Zero);
         BuildSurface();
         Draw();
@@ -173,7 +173,7 @@ internal sealed partial class IslandApp : IDisposable
         if (expanded) BeginHoverReview();
         if (_expanded == expanded) { if (expanded && _review != null) UpdateTarget(); return; }
         _expanded = expanded;
-        if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)ClockTimer, expanded ? 1000u : 60000u, IntPtr.Zero);
+        if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)ClockTimer, expanded || (_slide == 4 && _settings.LyricsEnabled) ? 1000u : 60000u, IntPtr.Zero);
         UpdateTarget();
     }
 
@@ -324,12 +324,20 @@ internal sealed partial class IslandApp : IDisposable
                         { ShowPrompt("View", "Could not save the selected view."); }
                         if (_taskTest) _testSlides |= 1 << _slide;
                         SyncAgentAnimation();
+                        if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)ClockTimer, _expanded || (_slide == 4 && _settings.LyricsEnabled) ? 1000u : 60000u, IntPtr.Zero);
                         UpdateTarget();
                         _dirty = true;
                         return IntPtr.Zero;
                     }
                     if (_slide == 2 && !_settings.WeatherEnabled && my is >= 175 and <= 220 && localX is >= 24 and <= 180)
                     { ToggleWeather(); return IntPtr.Zero; }
+                    if (_slide == 3 && my is >= 116 and < 164 && localX is >= 24 and <= 376)
+                    {
+                        int index = (int)((my - 116) / 22);
+                        var open = _settings.Tasks.Where(t => !t.Done).Take(2).ToArray();
+                        if (index < open.Length) { open[index].Done = true; SaveTasks(); }
+                        return IntPtr.Zero;
+                    }
                     if (_slide == 3 && my is >= 175 and <= 220 && localX is >= 24 and <= 180)
                     { ShowMenu(); NavigatePanel(PanelPage.Tasks); return IntPtr.Zero; }
                     if (_slide == 4 && my is >= 180 and <= 220 && localX is >= 290 and <= 376)
@@ -471,7 +479,7 @@ internal sealed partial class IslandApp : IDisposable
                     _dirty = true;
                 }
                 else if (wParam.ToInt64() == UserIdleTimer) RefreshUserIdle();
-                else if (wParam.ToInt64() == ClockTimer) _dirty = true;
+                else if (wParam.ToInt64() == ClockTimer) { CheckTaskReminders(); _dirty = true; }
                 else if (wParam.ToInt64() == BlinkTimer)
                 {
                     _blinkStarted = _clock.Elapsed.TotalSeconds;
@@ -729,6 +737,25 @@ internal sealed partial class IslandApp : IDisposable
         _dirty = true;
     }
 
+    private void CheckTaskReminders()
+    {
+        if (_smokeTest || _taskTest) return;
+        DateTime now = DateTime.Now;
+        bool changed = false;
+        foreach (var task in _settings.Tasks)
+        {
+            if (!ShouldRemind(task, now)) continue;
+            task.RemindedDue = task.Due;
+            changed = true;
+            EnqueueNotification(new NotificationPreview("To-do", "Task reminder", task.Title));
+        }
+        if (changed) SaveTasks();
+    }
+
+    internal static bool ShouldRemind(TaskItem task, DateTime now) =>
+        !task.Done && task.Due is DateTime due && task.RemindedDue != due &&
+        now >= (task.HasTime ? due : due.Date.AddHours(9));
+
     private void SaveTasks()
     {
         try { _settings.Save(); }
@@ -928,6 +955,7 @@ internal sealed partial class IslandApp : IDisposable
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);
         ReleaseSurface();
+        _settingsWindow?.Dispose();
         _renderer.Dispose();
     }
 }
