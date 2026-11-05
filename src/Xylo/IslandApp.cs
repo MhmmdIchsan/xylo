@@ -455,7 +455,7 @@ internal sealed partial class IslandApp : IDisposable
                 else if (wParam.ToInt64() == ChargeAnimationTimer) _dirty = true;
                 else if (wParam.ToInt64() == AgentFrameTimer)
                 {
-                    if (_agents?.Activity?.Working != true) KillTimer(hwnd, (UIntPtr)AgentFrameTimer);
+                    if (!MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice)) KillTimer(hwnd, (UIntPtr)AgentFrameTimer);
                     else _dirty = true;
                 }
                 else if (wParam.ToInt64() == ClockTimer) _dirty = true;
@@ -486,6 +486,7 @@ internal sealed partial class IslandApp : IDisposable
                 else if (wParam.ToInt64() == NoticeTimer)
                 {
                     if (_agents?.Notice == null) KillTimer(hwnd, (UIntPtr)NoticeTimer);
+                    SyncAgentAnimation();
                     UpdateTarget();
                     _dirty = true;
                 }
@@ -546,9 +547,12 @@ internal sealed partial class IslandApp : IDisposable
 
     private void SyncAgentAnimation()
     {
-        if (_agents?.Activity?.Working == true) SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, 80, IntPtr.Zero);
+        if (MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice)) SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, 50, IntPtr.Zero);
         else KillTimer(_hwnd, (UIntPtr)AgentFrameTimer);
     }
+
+    internal static bool MascotNeedsAnimation(AgentActivity? activity, AgentApproval? approval, AgentNotice? notice) =>
+        activity?.Working == true || approval != null || notice != null;
 
     private void BeginHoverReview()
     {

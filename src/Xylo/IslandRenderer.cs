@@ -46,23 +46,45 @@ internal sealed class IslandRenderer : IDisposable
         _paint.Style = SKPaintStyle.Fill;
         canvas.ClipPath(_outline, SKClipOperation.Intersect, true);
 
-        _paint.Color = new SKColor(70, 82, 89);
+        bool attention = approval != null || notice != null || review != null;
+        bool isWorking = !attention && agent?.Working == true;
+        float pulse = (float)(0.5 + 0.5 * Math.Sin(seconds * (attention ? 4.2 : 2.6)));
+        float lift = attention ? -0.7f * pulse : isWorking ? -0.5f * pulse : 0;
+        canvas.Save();
+        canvas.Translate(0, lift);
+        var mask = new SKRect(left + 11, 8, left + 44, 34);
+        _paint.Style = SKPaintStyle.Fill;
+        _paint.Color = new SKColor(0, 0, 0, 100);
+        canvas.DrawRoundRect(new SKRect(mask.Left, mask.Top + 2, mask.Right, mask.Bottom + 2), 9, 9, _paint);
+        _paint.Color = new SKColor(32, 40, 44);
+        canvas.DrawRoundRect(mask, 9, 9, _paint);
+        _paint.Color = new SKColor(19, 24, 28);
+        canvas.DrawRoundRect(new SKRect(left + 13, 10, left + 42, 32), 7, 7, _paint);
         _paint.Style = SKPaintStyle.Stroke;
         _paint.StrokeWidth = 1;
-        canvas.DrawRoundRect(new SKRect(left + 13, 10, left + 42, 32), 8, 8, _paint);
-        _paint.Color = new SKColor(130, 230, 190);
+        _paint.Color = attention ? new SKColor(255, 185, 100, (byte)(100 + 90 * pulse)) : isWorking ? new SKColor(130, 230, 190, (byte)(100 + 70 * pulse)) : new SKColor(100, 117, 119, 130);
+        canvas.DrawRoundRect(mask, 9, 9, _paint);
+        _paint.Color = new SKColor(255, 255, 255, 35);
+        canvas.DrawLine(left + 20, 10, left + 35, 10, _paint);
         float blink = blinkStarted < 0 ? 0 : (float)Math.Sin(Math.Clamp((seconds - blinkStarted) / 0.3, 0, 1) * Math.PI);
-        float eyeHeight = 4.0f - blink * 3.5f;
-        _paint.StrokeWidth = 2;
+        float eyeHeight = (attention ? 4.7f : 4.0f) - blink * 3.3f;
         _paint.StrokeCap = SKStrokeCap.Round;
-        float thinking = agent?.Working == true ? (float)Math.Sin(seconds * 1.8) * 1.1f : 0;
-        if (agent?.Working == true) eyeHeight += (float)Math.Sin(seconds * 1.8) * 0.55f;
+        float thinking = isWorking ? (float)Math.Sin(seconds * 2.6) * 1.5f : 0;
+        if (isWorking) eyeHeight += (float)Math.Sin(seconds * 2.6) * 0.8f;
+        if (attention) eyeHeight += (pulse - 0.5f) * 1.1f;
         foreach (float eyeX in new[] { left + 22, left + 33 })
         {
+            _paint.StrokeWidth = 4;
+            _paint.Color = attention ? new SKColor(255, 170, 80, (byte)(30 + 40 * pulse)) : new SKColor(100, 240, 185, isWorking ? (byte)(30 + 35 * pulse) : (byte)20);
+            canvas.DrawLine(eyeX + thinking - 3, 21 - eyeHeight, eyeX + thinking + 3, 21 + eyeHeight, _paint);
+            canvas.DrawLine(eyeX + thinking + 3, 21 - eyeHeight, eyeX + thinking - 3, 21 + eyeHeight, _paint);
+            _paint.StrokeWidth = 2;
+            _paint.Color = attention ? new SKColor(255, 195, 120) : new SKColor(150, 245, 205);
             canvas.DrawLine(eyeX + thinking - 3, 21 - eyeHeight, eyeX + thinking + 3, 21 + eyeHeight, _paint);
             canvas.DrawLine(eyeX + thinking + 3, 21 - eyeHeight, eyeX + thinking - 3, 21 + eyeHeight, _paint);
         }
         _paint.Style = SKPaintStyle.Fill;
+        canvas.Restore();
         if (prompt != null)
             Text(canvas, "Attention", left + 52, 26, 12, SKColors.White);
         else if (review != null && height > 100)

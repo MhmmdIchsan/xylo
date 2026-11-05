@@ -45,20 +45,29 @@ internal static class SelfTest
         using var first = new SkiaSharp.SKBitmap(700, 420);
         using var second = new SkiaSharp.SKBitmap(700, 420);
         using var renderer = new IslandRenderer();
-        void Render(SkiaSharp.SKBitmap bitmap, double seconds)
+        bool HasMotion(AgentActivity? state, AgentApproval? approval, AgentNotice? notice)
         {
-            using var canvas = new SkiaSharp.SKCanvas(bitmap);
-            renderer.Draw(canvas, 1, 400, 236, false, new BatteryStatus(null, false, null), seconds, -1,
-                null, null, false, new FocusTimer(), null, 0, agent, null, null, Array.Empty<TaskItem>(), 1,
-                null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true,
-                Enumerable.Range(0, 7).ToArray(), new[] { agent }, false, null, "Unavailable");
-            canvas.Flush();
+            void Render(SkiaSharp.SKBitmap bitmap, double seconds)
+            {
+                using var canvas = new SkiaSharp.SKCanvas(bitmap);
+                renderer.Draw(canvas, 1, 400, 236, false, new BatteryStatus(null, false, null), seconds, -1,
+                    null, null, false, new FocusTimer(), approval, 0, state, null, notice, Array.Empty<TaskItem>(), 1,
+                    null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true,
+                    Enumerable.Range(0, 7).ToArray(), state == null ? Array.Empty<AgentActivity>() : new[] { state }, false, null, "Unavailable");
+                canvas.Flush();
+            }
+            Render(first, 0); Render(second, 0.7);
+            for (int y = 6; y <= 37; y++)
+                for (int x = 158; x <= 196; x++)
+                    if (first.GetPixel(x, y) != second.GetPixel(x, y)) return true;
+            return false;
         }
-        Render(first, 0); Render(second, 0.7);
-        for (int y = 8; y <= 34; y++)
-            for (int x = 160; x <= 195; x++)
-                if (first.GetPixel(x, y) != second.GetPixel(x, y)) return true;
-        return false;
+        var approval = new AgentApproval("Codex", "test", "Bash", "test", "test", new TaskCompletionSource<string>());
+        var input = new AgentNotice("Codex", "test", "r", "User input", "test", DateTimeOffset.UtcNow, true);
+        var interrupted = agent with { Working = false, Interrupted = true };
+        return HasMotion(agent, null, null) && HasMotion(null, approval, null) && HasMotion(null, null, input) && !HasMotion(null, null, null)
+            && IslandApp.MascotNeedsAnimation(agent, null, null) && IslandApp.MascotNeedsAnimation(null, approval, null)
+            && IslandApp.MascotNeedsAnimation(null, null, input) && !IslandApp.MascotNeedsAnimation(interrupted, null, null);
     }
 
     private static bool TestMediaRendering()
