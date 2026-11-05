@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -82,6 +82,12 @@ internal sealed class IslandRenderer : IDisposable
         }
         else if (media == null) Text(canvas, "Ready", right - 58, 29, 12, new SKColor(160, 169, 179));
 
+        if (media != null && height < 110 && height > 54)
+        {
+            string line = lyrics?.Current(media.CurrentPosition) ?? "Looking for lyrics…";
+            Text(canvas, Truncate(line, width - 48, 12), left + 24, 52, 12, new SKColor(130, 230, 190));
+        }
+
         float reveal = Math.Clamp((height - 55) / 165, 0, 1);
         reveal = reveal * reveal * (3 - 2 * reveal);
         if (reveal > 0)
@@ -106,7 +112,11 @@ internal sealed class IslandRenderer : IDisposable
                 Text(canvas, Truncate(media.Artist, width - 48, 13), left + 24, 97, 13, new SKColor(160, 169, 179));
                 string elapsed = TimeSpan.FromSeconds(media.CurrentPosition).ToString(@"m\:ss");
                 string total = TimeSpan.FromSeconds(Math.Max(0, media.Duration)).ToString(@"m\:ss");
-                Text(canvas, $"{elapsed} / {total}", left + 24, 145, 12, new SKColor(160, 169, 179));
+                Text(canvas, $"{elapsed} / {total}", left + 24, 118, 11, new SKColor(160, 169, 179));
+                string[] visible = lyrics?.Visible(media.CurrentPosition) ?? new[] { "Looking for lyrics…" };
+                for (int i = 0; i < Math.Min(3, visible.Length); i++)
+                    Text(canvas, Truncate(visible[i], width - 48, 12), left + 24, 140 + 17 * i, 12,
+                        i == 0 ? new SKColor(130, 230, 190) : new SKColor(160, 169, 179));
                 DrawTransport(canvas, left + 145, 201, -1, false, true);
                 DrawTransport(canvas, left + 195, 201, 1, media.Playing, false);
                 DrawTransport(canvas, left + 245, 201, 1, false, true);

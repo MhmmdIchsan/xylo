@@ -8,6 +8,8 @@ if (Get-Process Xylo -ErrorAction SilentlyContinue) { throw 'Quit Xylo before ru
 $reportPath = Join-Path $env:TEMP 'xylo-smoke-test.json'
 $started = Get-Date
 $executable = Join-Path $repository 'src/Xylo/bin/Release/net8.0-windows10.0.19041.0/win-x64/Xylo.exe'
+$selfTest = Start-Process -FilePath $executable -ArgumentList '--self-test' -PassThru -WindowStyle Hidden -Wait
+if ($selfTest.ExitCode -ne 0) { throw 'Lyric parser self-test failed.' }
 $process = Start-Process -FilePath $executable -ArgumentList '--smoke-test' -PassThru -WindowStyle Hidden
 if (!$process.WaitForExit(20000)) {
     $process.Kill()

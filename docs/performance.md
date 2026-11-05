@@ -22,3 +22,5 @@ The regular app blocks waiting for Windows messages when idle. Active animation 
 These short tests do not establish long-running memory stability, behavior under notification bursts, or memory usage with agent adapters and clipboard history. Measurements may vary by runtime, display scaling, fonts, and OS. The target remains at most 50 MB idle including any future helper processes; it must be measured again as features are added. MiB values above use 1,048,576 bytes per unit.
 
 After adding top-edge attachment, hover activation, composition-paced animation, and content fading, the local smoke test measured 34.2 MiB working set, 10.7 MiB private bytes, zero idle renders, and unchanged GDI object count (2). This remains a short desktop-shell measurement.
+
+With the Windows media service and an active lyric lookup, a short real-session run measured approximately 74 MiB working set and 19 MiB private bytes. This exceeds the 50 MB working-set target; the smoke test disables live media and cosmetic animation and must not be used as a measurement of that full configuration. Further memory work and long-running tests are needed.

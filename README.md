@@ -12,6 +12,7 @@ The first desktop prototype is implemented. It currently provides the notch shel
 - Circular battery percentage indicator with a moving charge highlight; unavailable battery readings are hidden.
 - Minimal animated eyes blink periodically without a continuously running animation loop.
 - Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.
+- Shows the current synchronized lyric line in the compact notch and upcoming lines when expanded. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.
 - System tray menu to expand/collapse or quit.
 - Configuration in the right-click menu switches between an attached notch and a floating island; the choice is saved locally.
 - `Ctrl+Alt+X` global toggle shortcut, when available.
@@ -57,7 +58,7 @@ Planned agent integrations include Codex, Claude Code, OpenCode, Cursor, and Ant
 
 Xylo adapts the native C# / SkiaSharp / Win32 foundation of [WinIsland](https://github.com/zHeuzy2/WinIsland). The Win32 declarations and spring integrator are adapted from upstream; the desktop shell and renderer are tailored to Xylo. See [third-party notices](third-party/README.md).
 
-The initial memory target is **at most 50 MB at idle**, including Xylo helper processes. Short local smoke tests of the desktop shell measured approximately **33 MiB working set** and **10 MiB private bytes**, with no additional helper processes. These are preliminary measurements, not a long-running or fully integrated product guarantee. See [performance notes](docs/performance.md).
+The initial memory target is **at most 50 MB at idle**, including Xylo helper processes. A short local run with media and lyric lookup active measured approximately **74 MiB working set** and **19 MiB private bytes**, so the working-set target is not yet met. See [performance notes](docs/performance.md).
 
 ## Development status
 

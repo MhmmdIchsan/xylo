@@ -33,6 +33,7 @@ internal sealed class IslandApp : IDisposable
     private long _idleRenderStart;
     private BatteryStatus _battery;
     private MediaService? _media;
+    private LyricsService? _lyrics;
     private double _blinkStarted = -1;
 
     public IslandApp(bool smokeTest)
@@ -60,6 +61,7 @@ internal sealed class IslandApp : IDisposable
         if (_hwnd == IntPtr.Zero) throw new Win32Exception();
         if (!_smokeTest)
         {
+            _lyrics = new LyricsService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _media = new MediaService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _media.Start();
         }
@@ -119,8 +121,11 @@ internal sealed class IslandApp : IDisposable
 
     private void UpdateTarget()
     {
-        _width.Target = _expanded ? 400 : (_media?.Snapshot != null ? 340 : 180);
-        _height.Target = _expanded ? 236 : 42;
+        double targetWidth = _expanded ? 400 : (_media?.Snapshot != null ? 400 : 180);
+        double targetHeight = _expanded ? 236 : (_media?.Snapshot != null ? 68 : 42);
+        if (_width.Target == targetWidth && _height.Target == targetHeight) return;
+        _width.Target = targetWidth;
+        _height.Target = targetHeight;
         if (!_animating) _lastFrame = _clock.Elapsed.TotalSeconds;
         _animating = true;
     }
@@ -173,6 +178,7 @@ internal sealed class IslandApp : IDisposable
                 }
                 return IntPtr.Zero;
             case WM_APP_UPDATE:
+                _lyrics?.Update(_media?.Snapshot);
                 UpdateTarget();
                 _dirty = true;
                 return IntPtr.Zero;
@@ -279,7 +285,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -385,6 +391,7 @@ internal sealed class IslandApp : IDisposable
     {
         if (_hotkeyRegistered) UnregisterHotKey(_hwnd, 1);
         _media?.Dispose();
+        _lyrics?.Dispose();
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);
         ReleaseSurface();
