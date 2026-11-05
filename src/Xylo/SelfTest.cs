@@ -17,9 +17,9 @@ internal static class SelfTest
                 Enumerable.Range(0, 7).ToArray(), new[] { agent });
             canvas.Flush();
         }
-        Render(first, 0); Render(second, 0.5);
-        for (int y = 121; y <= 135; y++)
-            for (int x = 173; x <= 187; x++)
+        Render(first, 0); Render(second, 0.25);
+        for (int y = 8; y <= 34; y++)
+            for (int x = 160; x <= 195; x++)
                 if (first.GetPixel(x, y) != second.GetPixel(x, y)) return true;
         return false;
     }
@@ -122,6 +122,9 @@ internal static class SelfTest
             && wifiConnected?.Title == "Wi-Fi connected" && wifiSame == null && muted.Title == "Muted" && muted.Progress == 0
             && VolumeHudService.Preview(0.7f, false, 0.5f).Title == "Volume up" && VolumeHudService.Preview(0.4f, false, 0.5f).Title == "Volume down"
             && NotificationService.CreatePreview("WhatsApp", "Incoming call", "Alice").Kind == "whatsapp-call"
+            && NotificationService.SourceLabel(NotificationService.CreatePreview("WhatsApp", "Akhyar", "Halo")) == "WhatsApp / Akhyar"
+            && NotificationService.SourceLabel(NotificationService.CreatePreview("WhatsApp", "Group A", "Halo")) == "WhatsApp / Group A"
+            && NotificationService.SourceLabel(NotificationService.CreatePreview("Chrome", "Group A", "Hello")) == "Chrome / Group A"
             && NotificationService.CreatePreview("Chrome", "News", "WhatsApp mentioned").Kind == "notification"
             && NotificationService.CreatePreview("Chrome", "web.whatsapp.com", "Hello").Kind == "whatsapp"
             && BrightnessHudService.Preview(55).Progress == 0.55f;

@@ -159,6 +159,15 @@ internal sealed class NotificationService : IDisposable
         bool call = whatsapp && new[] { "incoming call", "calling", "panggilan", "video call", "voice call" }.Any(word => title.Contains(word, StringComparison.OrdinalIgnoreCase) || body.Contains(word, StringComparison.OrdinalIgnoreCase));
         return new NotificationPreview(Short(app, 100), Short(string.IsNullOrEmpty(title) ? app : title, 200), Short(body, 500), Kind: call ? "whatsapp-call" : whatsapp ? "whatsapp" : "notification");
     }
+    internal static string SourceLabel(NotificationPreview item)
+    {
+        string app = item.Kind.StartsWith("whatsapp", StringComparison.Ordinal) ? "WhatsApp" : item.App;
+        app = SingleLine(app);
+        string sender = SingleLine(item.Title);
+        if (string.IsNullOrWhiteSpace(sender) || sender.Equals(app, StringComparison.OrdinalIgnoreCase) || sender.Equals("web.whatsapp.com", StringComparison.OrdinalIgnoreCase)) return app;
+        return app + " / " + sender;
+    }
+    internal static string SingleLine(string value) => value.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ').Trim();
     private static string Short(string text, int limit) => text.Length <= limit ? text : text[..limit] + "…";
     public void Stop()
     {

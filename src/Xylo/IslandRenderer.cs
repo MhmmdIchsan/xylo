@@ -55,11 +55,17 @@ internal sealed class IslandRenderer : IDisposable
         float eyeHeight = 4.0f - blink * 3.5f;
         _paint.StrokeWidth = 2;
         _paint.StrokeCap = SKStrokeCap.Round;
+        if (agent?.Working == true)
+        {
+            canvas.Save();
+            canvas.RotateDegrees((float)(seconds * 180 % 360), left + 27.5f, 21);
+        }
         foreach (float eyeX in new[] { left + 22, left + 33 })
         {
             canvas.DrawLine(eyeX - 3, 21 - eyeHeight, eyeX + 3, 21 + eyeHeight, _paint);
             canvas.DrawLine(eyeX + 3, 21 - eyeHeight, eyeX - 3, 21 + eyeHeight, _paint);
         }
+        if (agent?.Working == true) canvas.Restore();
         _paint.Style = SKPaintStyle.Fill;
         if (prompt != null)
             Text(canvas, "Attention", left + 52, 26, 12, SKColors.White);
@@ -76,19 +82,15 @@ internal sealed class IslandRenderer : IDisposable
         else if (preview != null)
         {
             if (!preview.IsHud) NotificationIcon(canvas, left + 62, 20, preview.Kind);
-            Text(canvas, Truncate(preview.Title, Math.Max(0, width - 155), 12), left + (preview.IsHud ? 52 : 78), 26, 12, SKColors.White);
+            Text(canvas, Truncate(preview.IsHud ? preview.Title : NotificationService.SourceLabel(preview), Math.Max(0, width - 155), 12), left + (preview.IsHud ? 52 : 78), 26, 12, SKColors.White);
         }
         else if (slide == 4 && media != null)
             Text(canvas, Truncate(media.Title, Math.Max(0, width - 155), 12), left + 52, 26, 12, new SKColor(235, 240, 242));
         else if (slide == 1 && agent != null)
         {
             int working = agents.Count(a => a.Working);
-            string label = Truncate(working > 1 ? $"{working} agents working" : agent.Agent + (agent.Working ? " working" : " finished"), width - 150, 11);
-            _font.Size = 11;
-            float labelWidth = _font.MeasureText(label);
-            float labelX = left + width / 2 - (labelWidth + (agent.Working ? 16 : 0)) / 2;
-            if (agent.Working) DrawLoader(canvas, labelX + 5, 21, seconds);
-            Text(canvas, label, labelX + (agent.Working ? 16 : 0), 26, 11, new SKColor(130, 230, 190));
+            string label = Truncate(working > 1 ? $"{working} agents working" : agent.Agent + (agent.Working ? " working" : " finished"), width - 125, 11);
+            CenterText(canvas, label, left + width / 2, 26, 11, new SKColor(130, 230, 190));
         }
         else if (slide == 6 && focus.Active)
             CenterText(canvas, Truncate(focus.Display, width - 125, 12), left + width / 2, 26, 12, new SKColor(130, 230, 190));
@@ -115,12 +117,6 @@ internal sealed class IslandRenderer : IDisposable
         }
         if (unreadCount > 0 && height < 100 && preview == null && approval == null && notice == null)
             DrawBell(canvas, right - (battery.Percent.HasValue ? 50 : 24), 21);
-        if (slide != 1 && agent?.Working == true && approval == null && notice == null && preview == null && prompt == null && review == null && composer == null && panel == null)
-        {
-            bool bell = unreadCount > 0 && height < 100;
-            float offset = battery.Percent.HasValue ? (bell ? 76 : 50) : (bell ? 50 : 24);
-            DrawLoader(canvas, right - offset, 21, seconds);
-        }
 
         if (height > 200 && panel == null && composer == null && review == null && prompt == null && approval == null)
         {
@@ -222,8 +218,8 @@ internal sealed class IslandRenderer : IDisposable
             else if (preview != null)
             {
                 if (!preview.IsHud) NotificationIcon(canvas, left + 36, 67, preview.Kind);
-                Text(canvas, Truncate(preview.Kind == "whatsapp-call" ? "WhatsApp call" : preview.Kind == "whatsapp" ? "WhatsApp" : preview.App, width - 76, 12), left + (preview.IsHud ? 24 : 54), 70, 12, new SKColor(130, 230, 190));
-                Text(canvas, Truncate(preview.Title, width - 48, 16), left + 24, 99, 16, SKColors.White);
+                Text(canvas, Truncate(preview.IsHud ? preview.App : NotificationService.SourceLabel(preview), width - 76, 12), left + (preview.IsHud ? 24 : 54), 70, 12, new SKColor(130, 230, 190));
+                Text(canvas, Truncate(preview.Kind == "whatsapp-call" ? "WhatsApp call" : preview.Title, width - 48, 16), left + 24, 99, 16, SKColors.White);
                 Text(canvas, Truncate(preview.Body.Replace('\n', ' ').Replace('\r', ' '), width - 48, 12), left + 24, 128, 12, new SKColor(160, 169, 179));
                 if (preview.Progress is float progress) DrawProgress(canvas, left + 24, 145, width - 48, progress);
             }
@@ -261,10 +257,11 @@ internal sealed class IslandRenderer : IDisposable
                     for (int i = 0; i < Math.Min(3, notifications.Count); i++)
                     {
                         var item = notifications[i];
-                        string title = item.Title.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ');
-                        string app = item.Kind.StartsWith("whatsapp", StringComparison.Ordinal) ? "WhatsApp" : item.App;
-                        Text(canvas, Truncate(title, 154, 11), left + 220, 132 + 29 * i, 11, new SKColor(225, 235, 235));
-                        Text(canvas, Truncate(app.Replace('\r', ' ').Replace('\n', ' '), 154, 9), left + 220, 145 + 29 * i, 9, new SKColor(160, 169, 179));
+                        string source = NotificationService.SourceLabel(item);
+                        string body = NotificationService.SingleLine(item.Body);
+                        NotificationIcon(canvas, left + 228, 129 + 29 * i, item.Kind);
+                        Text(canvas, Truncate(source, 132, 10), left + 243, 132 + 29 * i, 10, new SKColor(225, 235, 235));
+                        Text(canvas, Truncate(body, 132, 9), left + 243, 145 + 29 * i, 9, new SKColor(160, 169, 179));
                     }
                 }
                 else if (slide == 1)
@@ -275,7 +272,8 @@ internal sealed class IslandRenderer : IDisposable
                     {
                         var item = agents[i];
                         string name = item.Agent + (item.Working ? " · working" : " · finished");
-                        if (item.Working) DrawLoader(canvas, left + 30, 128 + 23 * i, seconds);
+                        _paint.Color = item.Working ? new SKColor(130, 230, 190) : new SKColor(130, 140, 145);
+                        canvas.DrawCircle(left + 30, 128 + 23 * i, 3, _paint);
                         Text(canvas, Truncate(name, 126, 12), left + 43, 132 + 23 * i, 12, new SKColor(130, 230, 190));
                         Text(canvas, Truncate(item.Project, 200, 11), left + 174, 132 + 23 * i, 11, new SKColor(160, 169, 179));
                     }
@@ -381,15 +379,6 @@ internal sealed class IslandRenderer : IDisposable
         canvas.DrawRoundRect(new SKRect(x, y, x + width, y + 4), 2, 2, _paint);
         _paint.Color = new SKColor(130, 230, 190);
         canvas.DrawRoundRect(new SKRect(x, y, x + width * Math.Clamp(progress, 0, 1), y + 4), 2, 2, _paint);
-    }
-
-    private void DrawLoader(SKCanvas canvas, float x, float y, double seconds)
-    {
-        var ring = new SKRect(x - 5, y - 5, x + 5, y + 5);
-        _paint.Style = SKPaintStyle.Stroke; _paint.StrokeWidth = 1.5f; _paint.StrokeCap = SKStrokeCap.Round;
-        _paint.Color = new SKColor(130, 230, 190, 45); canvas.DrawOval(ring, _paint);
-        _paint.Color = new SKColor(130, 230, 190); canvas.DrawArc(ring, (float)(seconds * 240 % 360), 105, false, _paint);
-        _paint.Style = SKPaintStyle.Fill;
     }
 
     private void DrawArtwork(SKCanvas canvas, float x, float y, byte[]? bytes)
@@ -555,17 +544,16 @@ internal sealed class IslandRenderer : IDisposable
 
     private void NotificationIcon(SKCanvas canvas, float x, float y, string kind)
     {
+        if (!kind.StartsWith("whatsapp", StringComparison.Ordinal)) { DrawBell(canvas, x, y); return; }
         _paint.Style = SKPaintStyle.Fill;
-        _paint.Color = kind.StartsWith("whatsapp", StringComparison.Ordinal) ? new SKColor(37, 180, 105) : new SKColor(83, 108, 135);
+        _paint.Color = new SKColor(37, 180, 105);
         canvas.DrawCircle(x, y, 10, _paint);
-        if (kind == "whatsapp-call")
-        {
-            _paint.Color = SKColors.White; _paint.Style = SKPaintStyle.Stroke; _paint.StrokeWidth = 2;
-            canvas.DrawArc(new SKRect(x - 4, y - 5, x + 4, y + 5), 45, 145, false, _paint);
-            _paint.Style = SKPaintStyle.Fill;
-        }
-        else if (kind == "whatsapp") CenterText(canvas, "W", x, y + 4, 11, SKColors.White);
-        else { _paint.Color = SKColors.White; canvas.DrawCircle(x, y, 2, _paint); }
+        _paint.Color = SKColors.White; _paint.Style = SKPaintStyle.Stroke; _paint.StrokeWidth = 1.3f;
+        canvas.DrawArc(new SKRect(x - 6, y - 6, x + 6, y + 6), 40, 290, false, _paint);
+        canvas.DrawLine(x - 5, y + 4, x - 6, y + 7, _paint); canvas.DrawLine(x - 6, y + 7, x - 2, y + 6, _paint);
+        _paint.StrokeWidth = 1.8f;
+        canvas.DrawArc(new SKRect(x - 3, y - 4, x + 4, y + 4), 30, 140, false, _paint);
+        _paint.Style = SKPaintStyle.Fill;
     }
 
     private void DrawBell(SKCanvas canvas, float x, float y)
