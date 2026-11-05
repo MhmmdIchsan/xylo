@@ -2,7 +2,7 @@
 
 Xylo is a Dynamic Island for Windows: a compact desktop notch being developed for AI agent activity, notifications, and quick clipboard access.
 
-The desktop prototype includes media, lyrics, battery status, optional clipboard history, and a Codex approval adapter. Windows notification previews are not implemented yet.
+The desktop prototype includes media, lyrics, battery status, optional clipboard and notification previews, and agent approval adapters.
 
 ## Available now
 
@@ -14,6 +14,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.
 - Shows the current synchronized lyric line in the compact notch and upcoming lines when expanded. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.
 - Optional clipboard history in the right-click menu: enable explicitly, then select a recent text item to copy it. History holds up to 20 entries in memory and is cleared on exit or when disabled. Clipboard entries may contain sensitive information.
+- Optional Windows notification previews can be enabled from the right-click menu after granting Windows access. Availability depends on Windows permission and package identity; previews mirror content supplied by the originating app and may contain sensitive information.
 - Focus, short break and long break timers, with pause/resume controls in the right-click menu.
 - Optional [Codex](integrations/codex/README.md) and [Claude Code](integrations/claude/README.md) approval integrations, with an explicit review dialog and safe fallback to the original agent prompt.
 - System tray menu to expand/collapse or quit.

@@ -6,6 +6,7 @@ internal sealed class Settings
 {
     public bool Detached { get; set; }
     public bool ClipboardEnabled { get; set; }
+    public bool NotificationsEnabled { get; set; }
     private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Xylo", "settings.json");
 
     public static Settings Load()

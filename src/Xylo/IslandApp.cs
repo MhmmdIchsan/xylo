@@ -11,7 +11,8 @@ internal sealed class IslandApp : IDisposable
 {
     public const float CanvasWidth = 440;
     private const float CanvasHeight = 250;
-    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7;
+    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8;
+    private const uint PreviewMessage = 0x8004, NotificationStatusMessage = 0x8005;
     private readonly WndProc _windowProcedure;
     private readonly IslandRenderer _renderer = new();
     private readonly Spring _width = new(initial: 180);
@@ -35,6 +36,10 @@ internal sealed class IslandApp : IDisposable
     private MediaService? _media;
     private LyricsService? _lyrics;
     private AgentBridge? _agents;
+    private NotificationService? _notifications;
+    private readonly Queue<NotificationPreview> _notificationQueue = new();
+    private NotificationPreview? _preview;
+    private bool _notificationPrompt;
     private readonly ClipboardHistory _clipboard = new();
     private readonly FocusTimer _focus = new();
     private bool _clipboardListening;
@@ -66,6 +71,9 @@ internal sealed class IslandApp : IDisposable
         if (!_smokeTest && _settings.ClipboardEnabled) _clipboardListening = AddClipboardFormatListener(_hwnd);
         if (!_smokeTest)
         {
+            _notifications = new NotificationService(EnqueueNotification,
+                () => PostMessage(_hwnd, NotificationStatusMessage, IntPtr.Zero, IntPtr.Zero));
+            if (_settings.NotificationsEnabled) _notifications.Start(false);
             _agents = new AgentBridge(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _agents.Start();
             _lyrics = new LyricsService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
@@ -128,7 +136,7 @@ internal sealed class IslandApp : IDisposable
 
     private void UpdateTarget()
     {
-        bool needsDetail = _media?.Snapshot != null || _agents?.Pending != null;
+        bool needsDetail = _media?.Snapshot != null || _agents?.Pending != null || _preview != null;
         double targetWidth = _expanded ? 400 : (needsDetail ? 400 : 180);
         double targetHeight = _expanded ? 236 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
@@ -179,6 +187,7 @@ internal sealed class IslandApp : IDisposable
                     request.Completion.TrySetResult(response == 6 ? "allow" : response == 7 ? "deny" : "defer");
                     return IntPtr.Zero;
                 }
+                if (_preview != null) return IntPtr.Zero;
                 if (_expanded && _media?.Snapshot != null)
                 {
                     float mx = (short)(lParam.ToInt64() & 0xffff) / _scale;
@@ -196,6 +205,22 @@ internal sealed class IslandApp : IDisposable
                 _lyrics?.Update(_media?.Snapshot);
                 UpdateTarget();
                 _dirty = true;
+                return IntPtr.Zero;
+            case PreviewMessage:
+                if (_preview == null) ShowNextNotification();
+                return IntPtr.Zero;
+            case NotificationStatusMessage:
+                if (_notifications != null && !_notifications.Requesting)
+                {
+                    if (_notificationPrompt && !_notifications.Active && _notifications.LastError != null)
+                        MessageBox(hwnd, _notifications.LastError, "Xylo notifications", 0x10);
+                    if (_notificationPrompt && _notifications.Active)
+                    {
+                        _settings.NotificationsEnabled = true;
+                        try { _settings.Save(); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+                    }
+                    _notificationPrompt = false;
+                }
                 return IntPtr.Zero;
             case 0x031D: // WM_CLIPBOARDUPDATE
                 if (_clipboardListening) _clipboard.Capture(hwnd);
@@ -239,6 +264,10 @@ internal sealed class IslandApp : IDisposable
                 {
                     if (_focus.Tick()) KillTimer(hwnd, (UIntPtr)FocusTickTimer);
                     _dirty = true;
+                }
+                else if (wParam.ToInt64() == PreviewTimer)
+                {
+                    if (_agents?.Pending == null) ShowNextNotification();
                 }
                 return IntPtr.Zero;
             case 0x0218: // WM_POWERBROADCAST
@@ -308,7 +337,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -350,6 +379,7 @@ internal sealed class IslandApp : IDisposable
             AppendMenu(menu, MF_STRING, (UIntPtr)1, _expanded ? "Collapse Xylo" : "Expand Xylo");
             AppendMenu(menu, MF_STRING, (UIntPtr)3, _settings.Detached ? "Configuration: Attach to top" : "Configuration: Float below top");
             AppendMenu(menu, MF_STRING, (UIntPtr)4, _clipboardListening ? "Disable clipboard history" : "Enable clipboard history");
+            AppendMenu(menu, MF_STRING, (UIntPtr)11, _notifications?.Active == true ? "Disable notification previews" : "Enable notification previews");
             AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, "");
             AppendMenu(menu, MF_STRING, (UIntPtr)6, "Start focus (25 min)");
             AppendMenu(menu, MF_STRING, (UIntPtr)7, "Start break (5 min)");
@@ -401,6 +431,21 @@ internal sealed class IslandApp : IDisposable
                 _dirty = true;
             }
             else if (command == 10) { _focus.Clear(); KillTimer(_hwnd, (UIntPtr)FocusTickTimer); _dirty = true; }
+            else if (command == 11 && _notifications is not null && !_notifications.Requesting)
+            {
+                if (_notifications.Active)
+                {
+                    _notifications.Stop();
+                    _settings.NotificationsEnabled = false;
+                    try { _settings.Save(); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+                    lock (_notificationQueue) _notificationQueue.Clear();
+                    _preview = null;
+                    KillTimer(_hwnd, (UIntPtr)PreviewTimer);
+                    UpdateTarget();
+                    _dirty = true;
+                }
+                else { _notificationPrompt = true; _notifications.Start(true); }
+            }
             else if (command >= 100 && command < 110 && !_clipboard.Copy(_hwnd, (int)command - 100))
                 MessageBox(_hwnd, "Could not copy the selected item.", "Xylo", 0x10);
             PostMessage(_hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
@@ -440,6 +485,25 @@ internal sealed class IslandApp : IDisposable
         _dirty = true;
     }
 
+    private void EnqueueNotification(NotificationPreview preview)
+    {
+        lock (_notificationQueue)
+        {
+            if (_notificationQueue.Count >= 10) _notificationQueue.Dequeue();
+            _notificationQueue.Enqueue(preview);
+        }
+        PostMessage(_hwnd, PreviewMessage, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    private void ShowNextNotification()
+    {
+        lock (_notificationQueue) _preview = _notificationQueue.Count > 0 ? _notificationQueue.Dequeue() : null;
+        if (_preview == null) KillTimer(_hwnd, (UIntPtr)PreviewTimer);
+        else SetTimer(_hwnd, (UIntPtr)PreviewTimer, 6000, IntPtr.Zero);
+        UpdateTarget();
+        _dirty = true;
+    }
+
     private void SmokeTick()
     {
         _smokeTicks++;
@@ -474,6 +538,7 @@ internal sealed class IslandApp : IDisposable
         _media?.Dispose();
         _lyrics?.Dispose();
         _agents?.Dispose();
+        _notifications?.Dispose();
         if (_clipboardListening) RemoveClipboardFormatListener(_hwnd);
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);
