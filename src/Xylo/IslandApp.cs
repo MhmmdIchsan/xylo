@@ -11,7 +11,7 @@ internal sealed class IslandApp : IDisposable
 {
     public const float CanvasWidth = 440;
     private const float CanvasHeight = 250;
-    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8;
+    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9;
     private const uint PreviewMessage = 0x8004, NotificationStatusMessage = 0x8005;
     private readonly WndProc _windowProcedure;
     private readonly IslandRenderer _renderer = new();
@@ -136,8 +136,8 @@ internal sealed class IslandApp : IDisposable
 
     private void UpdateTarget()
     {
-        bool needsDetail = _media?.Snapshot != null || _agents?.Pending != null || _preview != null;
-        double targetWidth = _expanded ? 400 : (needsDetail ? 400 : 180);
+        bool needsDetail = _media?.Snapshot != null || _agents?.Pending != null || _agents?.Notice != null || _preview != null;
+        double targetWidth = _expanded ? 400 : (needsDetail ? 400 : _agents?.Activity != null ? 260 : 180);
         double targetHeight = _expanded ? 236 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
         _width.Target = targetWidth;
@@ -187,6 +187,7 @@ internal sealed class IslandApp : IDisposable
                     request.Completion.TrySetResult(response == 6 ? "allow" : response == 7 ? "deny" : "defer");
                     return IntPtr.Zero;
                 }
+                if (_agents?.Notice != null) return IntPtr.Zero;
                 if (_preview != null) return IntPtr.Zero;
                 if (_expanded && _media?.Snapshot != null)
                 {
@@ -203,6 +204,8 @@ internal sealed class IslandApp : IDisposable
                 return IntPtr.Zero;
             case WM_APP_UPDATE:
                 _lyrics?.Update(_media?.Snapshot);
+                if (_agents?.Notice != null) SetTimer(hwnd, (UIntPtr)NoticeTimer, 5000, IntPtr.Zero);
+                else KillTimer(hwnd, (UIntPtr)NoticeTimer);
                 UpdateTarget();
                 _dirty = true;
                 return IntPtr.Zero;
@@ -267,7 +270,13 @@ internal sealed class IslandApp : IDisposable
                 }
                 else if (wParam.ToInt64() == PreviewTimer)
                 {
-                    if (_agents?.Pending == null) ShowNextNotification();
+                    if (_agents?.Pending == null && _agents?.Notice == null) ShowNextNotification();
+                }
+                else if (wParam.ToInt64() == NoticeTimer)
+                {
+                    if (_agents?.Notice == null) KillTimer(hwnd, (UIntPtr)NoticeTimer);
+                    UpdateTarget();
+                    _dirty = true;
                 }
                 return IntPtr.Zero;
             case 0x0218: // WM_POWERBROADCAST
@@ -337,7 +346,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();

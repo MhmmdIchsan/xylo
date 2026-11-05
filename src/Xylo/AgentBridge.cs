@@ -6,6 +6,7 @@ namespace Xylo;
 
 internal sealed record AgentApproval(string Agent, string Session, string Tool, string Project, string Details, TaskCompletionSource<string> Completion);
 internal sealed record AgentActivity(string Agent, string Session, string Project, bool Working, DateTimeOffset Updated);
+internal sealed record AgentNotice(string Agent, string Session, string RequestId, string Tool, string Project, DateTimeOffset Updated);
 
 // The pipe accepts only the current Windows user. Hook messages and approvals are never persisted.
 internal sealed class AgentBridge : IDisposable
@@ -14,10 +15,15 @@ internal sealed class AgentBridge : IDisposable
     private readonly object _lock = new();
     private readonly List<AgentApproval> _pending = new();
     private readonly Dictionary<string, AgentActivity> _sessions = new();
+    private readonly Dictionary<string, AgentNotice> _notices = new();
     private readonly Action _changed;
     public AgentBridge(Action changed) => _changed = changed;
     public AgentApproval? Pending { get { lock (_lock) return _pending.FirstOrDefault(); } }
     public int PendingCount { get { lock (_lock) return _pending.Count; } }
+    public AgentNotice? Notice
+    {
+        get { lock (_lock) return _notices.Values.Where(n => DateTimeOffset.UtcNow - n.Updated < TimeSpan.FromMinutes(2)).OrderBy(n => n.Updated).FirstOrDefault(); }
+    }
     public AgentActivity? Activity
     {
         get
@@ -70,7 +76,7 @@ internal sealed class AgentBridge : IDisposable
                 var root = json.RootElement;
                 string kind = Read(root, "event");
                 string agent = Read(root, "agent");
-                if (agent is not ("Codex" or "Claude Code" or "Cursor")) return;
+                if (agent is not ("Codex" or "Claude Code" or "Cursor" or "OpenCode")) return;
                 if (kind != "PermissionRequest")
                 {
                     string session = agent + ":" + Read(root, "session");
@@ -78,7 +84,19 @@ internal sealed class AgentBridge : IDisposable
                     {
                         lock (_lock)
                         {
-                            if (kind == "SessionEnd") _sessions.Remove(session);
+                            string requestId = Read(root, "requestId");
+                            if (kind == "PermissionNotice" && requestId.Length is > 0 and <= 200)
+                            {
+                                if (_notices.Count >= 16 && !_notices.ContainsKey(requestId))
+                                    _notices.Remove(_notices.MinBy(pair => pair.Value.Updated).Key);
+                                _notices[requestId] = new(agent, session, requestId, Read(root, "tool"), Read(root, "project"), DateTimeOffset.UtcNow);
+                            }
+                            else if (kind == "PermissionResolved") _notices.Remove(requestId);
+                            else if (kind == "SessionEnd")
+                            {
+                                _sessions.Remove(session);
+                                foreach (string key in _notices.Where(n => n.Value.Session == session).Select(n => n.Key).ToArray()) _notices.Remove(key);
+                            }
                             else if (kind is "UserPromptSubmit" or "Stop")
                             {
                                 if (_sessions.Count >= 32 && !_sessions.ContainsKey(session))

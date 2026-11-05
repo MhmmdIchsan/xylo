@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -60,6 +60,8 @@ internal sealed class IslandRenderer : IDisposable
         _paint.Style = SKPaintStyle.Fill;
         if (approval != null)
             Text(canvas, approval.Agent + " needs approval", left + 52, 26, 12, new SKColor(255, 185, 100));
+        else if (notice != null)
+            Text(canvas, notice.Agent + " needs approval", left + 52, 26, 12, new SKColor(255, 185, 100));
         else if (preview != null)
             Text(canvas, Truncate(preview.Title, Math.Max(0, width - 135), 12), left + 52, 26, 12, SKColors.White);
         else if (media != null)
@@ -93,6 +95,8 @@ internal sealed class IslandRenderer : IDisposable
 
         if (approval != null && height < 110 && height > 54)
             Text(canvas, Truncate($"{approval.Tool} · click to review ({pendingCount})", width - 48, 12), left + 24, 52, 12, new SKColor(255, 185, 100));
+        else if (notice != null && height < 110 && height > 54)
+            Text(canvas, Truncate($"{notice.Tool} · review in {notice.Agent}", width - 48, 12), left + 24, 52, 12, new SKColor(255, 185, 100));
         else if (preview != null && height < 110 && height > 54)
             Text(canvas, Truncate(preview.Body.Replace('\n', ' ').Replace('\r', ' '), width - 48, 12), left + 24, 52, 12, new SKColor(160, 169, 179));
         else if (media != null && height < 110 && height > 54)
@@ -115,6 +119,13 @@ internal sealed class IslandRenderer : IDisposable
                 Text(canvas, Truncate(approval.Project, width - 48, 12), left + 24, 122, 12, new SKColor(160, 169, 179));
                 Text(canvas, "Click to review the complete request", left + 24, 160, 12, new SKColor(255, 185, 100));
                 Text(canvas, $"{pendingCount} request(s) waiting", left + 24, 182, 12, new SKColor(160, 169, 179));
+            }
+            else if (notice != null)
+            {
+                Text(canvas, notice.Agent + " needs approval", left + 24, 72, 16, SKColors.White);
+                Text(canvas, Truncate(notice.Tool, width - 48, 13), left + 24, 98, 13, new SKColor(255, 185, 100));
+                Text(canvas, Truncate(notice.Project, width - 48, 12), left + 24, 122, 12, new SKColor(160, 169, 179));
+                Text(canvas, "Review and respond in " + notice.Agent, left + 24, 160, 12, new SKColor(255, 185, 100));
             }
             else if (preview != null)
             {

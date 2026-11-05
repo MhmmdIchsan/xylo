@@ -18,6 +18,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Focus, short break and long break timers, with pause/resume controls in the right-click menu.
 - Optional [Codex](integrations/codex/README.md) and [Claude Code](integrations/claude/README.md) approval integrations, with an explicit review dialog and safe fallback to the original agent prompt.
 - Optional [Cursor activity and shell review](integrations/cursor/README.md); shell review is a separately enabled policy that reviews each matching command.
+- Optional [OpenCode activity and approval notices](integrations/opencode/README.md); permission decisions are made in OpenCode.
 - System tray menu to expand/collapse or quit.
 - Configuration in the right-click menu switches between an attached notch and a floating island; the choice is saved locally.
 - `Ctrl+Alt+X` global toggle shortcut, when available.
@@ -57,7 +58,7 @@ Quit any running instance before testing. The test briefly shows the notch and e
 - Clipboard search and pinned snippets.
 - Configurable notch appearance, placement, and notification priorities.
 
-Planned agent integrations include Codex, Claude Code, OpenCode, Cursor, and Antigravity. Supported capabilities will depend on each agent's available integration interfaces.
+Agent integrations differ in the events and approval controls they expose. Antigravity support is planned.
 
 ## Technical direction
 
