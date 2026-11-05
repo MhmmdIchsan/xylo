@@ -59,11 +59,11 @@ internal sealed class IslandRenderer : IDisposable
         }
         _paint.Style = SKPaintStyle.Fill;
         if (approval != null)
-            Text(canvas, "Codex needs approval", left + 52, 26, 12, new SKColor(255, 185, 100));
+            Text(canvas, approval.Agent + " needs approval", left + 52, 26, 12, new SKColor(255, 185, 100));
         else if (media != null)
             Text(canvas, Truncate(media.Title, Math.Max(0, width - 135), 12), left + 52, 26, 12, new SKColor(235, 240, 242));
         else if (agent != null && !focus.Active)
-            Text(canvas, Truncate(agent.Working ? "Codex working" : "Codex finished", width - 125, 11), left + 52, 26, 11, new SKColor(130, 230, 190));
+            Text(canvas, Truncate(agent.Agent + (agent.Working ? " working" : " finished"), width - 125, 11), left + 52, 26, 11, new SKColor(130, 230, 190));
         if (battery.Percent is int percent)
         {
             float centerX = right - 23;
@@ -106,7 +106,7 @@ internal sealed class IslandRenderer : IDisposable
             canvas.Translate(0, 8 * (1 - reveal));
             if (approval != null)
             {
-                Text(canvas, "Codex needs your approval", left + 24, 72, 16, SKColors.White);
+                Text(canvas, approval.Agent + " needs your approval", left + 24, 72, 16, SKColors.White);
                 Text(canvas, Truncate(approval.Tool, width - 48, 13), left + 24, 98, 13, new SKColor(255, 185, 100));
                 Text(canvas, Truncate(approval.Project, width - 48, 12), left + 24, 122, 12, new SKColor(160, 169, 179));
                 Text(canvas, "Click to review the complete request", left + 24, 160, 12, new SKColor(255, 185, 100));
@@ -120,7 +120,7 @@ internal sealed class IslandRenderer : IDisposable
             canvas.DrawLine(left + 24, 114, left + width - 24, 114, _paint);
             Text(canvas, "Focus timer", left + 24, 140, 13, SKColors.White);
             Text(canvas, focus.Active ? $"{focus.Label}: {focus.Display}" : "Start a timer from the right-click menu", left + 24, 161, 12, new SKColor(160, 169, 179));
-            if (agent != null) Text(canvas, agent.Working ? "Codex working" : "Codex finished", left + 24, 181, 11, new SKColor(130, 230, 190));
+            if (agent != null) Text(canvas, agent.Agent + (agent.Working ? " working" : " finished"), left + 24, 181, 11, new SKColor(130, 230, 190));
             Text(canvas, "Hover to open · move away to close", left + 24, 198, 12, new SKColor(130, 230, 190));
             Text(canvas, "Right-click for menu", left + 24, 218, 11, new SKColor(160, 169, 179));
             }

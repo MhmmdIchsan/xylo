@@ -9,7 +9,7 @@ import time
 user32 = ctypes.windll.user32
 user32.FindWindowW.restype = ctypes.c_void_p
 root = pathlib.Path(__file__).resolve().parents[1]
-hook = root / "integrations" / "codex" / "xylo_hook.py"
+hook = root / "integrations" / (sys.argv[1] if len(sys.argv) > 1 else "codex") / "xylo_hook.py"
 event = {"hook_event_name": "PermissionRequest", "session_id": "xylo-integration-test",
          "cwd": "synthetic-test", "tool_name": "Bash", "tool_input": {"command": "echo xylo-test"}}
 window = None
@@ -30,7 +30,7 @@ for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
     user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, 0)
     dialog = None
     for _ in range(30):
-        dialog = user32.FindWindowW("#32770", "Xylo — review Codex request")
+        dialog = user32.FindWindowW("#32770", "Xylo — review agent request")
         if dialog:
             break
         time.sleep(0.1)

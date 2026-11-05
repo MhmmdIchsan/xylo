@@ -3,7 +3,7 @@ import json
 import sys
 
 
-def main():
+def main(agent="Codex"):
     event = json.load(sys.stdin)
     kind = event.get("hook_event_name")
     if kind not in ("PermissionRequest", "UserPromptSubmit", "Stop", "SessionEnd"):
@@ -13,7 +13,7 @@ def main():
     if kind == "PermissionRequest" and (not tool or len(details) > 4096):
         return
     message = json.dumps({
-        "event": kind, "session": event.get("session_id", ""),
+        "agent": agent, "event": kind, "session": event.get("session_id", ""),
         "tool": tool, "project": event.get("cwd", ""), "details": details,
     }, ensure_ascii=False).encode("utf-8") + b"\n"
     try:

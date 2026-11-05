@@ -24,4 +24,4 @@ To enable this for a Codex configuration layer, merge the following entry into t
 
 Codex requires new non-managed hooks to be reviewed and trusted in `/hooks` or the app's hook settings. Hook availability and approval coverage depend on the installed Codex version and policy. See the [official Codex hooks documentation](https://learn.chatgpt.com/docs/hooks).
 
-UserPromptSubmit and Stop provide an approximate working/finished indicator; SessionEnd removes the session. These are hook events, not a guarantee that a process is still alive. The adapter does not yet support Claude Code, OpenCode, Cursor, or Antigravity.
+UserPromptSubmit and Stop provide an approximate working/finished indicator; SessionEnd removes the session. These are hook events, not a guarantee that a process is still alive. [Claude Code is supported separately](../claude/README.md); OpenCode, Cursor, and Antigravity are not yet supported.

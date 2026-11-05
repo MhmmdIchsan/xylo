@@ -4,8 +4,8 @@ using System.Text.Json;
 
 namespace Xylo;
 
-internal sealed record AgentApproval(string Session, string Tool, string Project, string Details, TaskCompletionSource<string> Completion);
-internal sealed record AgentActivity(string Session, string Project, bool Working, DateTimeOffset Updated);
+internal sealed record AgentApproval(string Agent, string Session, string Tool, string Project, string Details, TaskCompletionSource<string> Completion);
+internal sealed record AgentActivity(string Agent, string Session, string Project, bool Working, DateTimeOffset Updated);
 
 // The pipe accepts only the current Windows user. Hook messages and approvals are never persisted.
 internal sealed class AgentBridge : IDisposable
@@ -69,9 +69,11 @@ internal sealed class AgentBridge : IDisposable
                 using var json = JsonDocument.Parse(bytes.ToArray());
                 var root = json.RootElement;
                 string kind = Read(root, "event");
+                string agent = Read(root, "agent");
+                if (agent is not ("Codex" or "Claude Code")) return;
                 if (kind != "PermissionRequest")
                 {
-                    string session = Read(root, "session");
+                    string session = agent + ":" + Read(root, "session");
                     if (session.Length > 0 && session.Length <= 200)
                     {
                         lock (_lock)
@@ -81,7 +83,7 @@ internal sealed class AgentBridge : IDisposable
                             {
                                 if (_sessions.Count >= 32 && !_sessions.ContainsKey(session))
                                     _sessions.Remove(_sessions.MinBy(pair => pair.Value.Updated).Key);
-                                _sessions[session] = new(session, Read(root, "project"), kind == "UserPromptSubmit", DateTimeOffset.UtcNow);
+                                _sessions[session] = new(agent, session, Read(root, "project"), kind == "UserPromptSubmit", DateTimeOffset.UtcNow);
                             }
                         }
                         _changed();
@@ -92,7 +94,7 @@ internal sealed class AgentBridge : IDisposable
                 string tool = Read(root, "tool");
                 string details = Read(root, "details");
                 if (tool.Length == 0 || details.Length == 0 || details.Length > 4096) return;
-                approval = new(Read(root, "session"), tool, Read(root, "project"), details,
+                approval = new(agent, Read(root, "session"), tool, Read(root, "project"), details,
                     new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously));
                 lock (_lock) { if (_pending.Count >= 8) return; _pending.Add(approval); }
                 _changed();

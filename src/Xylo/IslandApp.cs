@@ -174,8 +174,8 @@ internal sealed class IslandApp : IDisposable
             case WM_LBUTTONUP:
                 if (_agents?.Pending is { } request)
                 {
-                    string details = $"Codex requests approval\n\nProject: {request.Project}\nTool: {request.Tool}\n\n{request.Details}\n\nAllow this action?";
-                    int response = MessageBox(_hwnd, details, "Xylo — review Codex request", 0x123);
+                    string details = $"{request.Agent} requests approval\n\nProject: {request.Project}\nTool: {request.Tool}\n\n{request.Details}\n\nAllow this action?";
+                    int response = MessageBox(_hwnd, details, "Xylo — review agent request", 0x123);
                     request.Completion.TrySetResult(response == 6 ? "allow" : response == 7 ? "deny" : "defer");
                     return IntPtr.Zero;
                 }

@@ -15,7 +15,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Shows the current synchronized lyric line in the compact notch and upcoming lines when expanded. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.
 - Optional clipboard history in the right-click menu: enable explicitly, then select a recent text item to copy it. History holds up to 20 entries in memory and is cleared on exit or when disabled. Clipboard entries may contain sensitive information.
 - Focus, short break and long break timers, with pause/resume controls in the right-click menu.
-- Optional [Codex approval integration](integrations/codex/README.md), with an explicit review dialog and safe fallback to the original Codex prompt.
+- Optional [Codex](integrations/codex/README.md) and [Claude Code](integrations/claude/README.md) approval integrations, with an explicit review dialog and safe fallback to the original agent prompt.
 - System tray menu to expand/collapse or quit.
 - Configuration in the right-click menu switches between an attached notch and a floating island; the choice is saved locally.
 - `Ctrl+Alt+X` global toggle shortcut, when available.
