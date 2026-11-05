@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -80,7 +80,10 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, $"{percent}%", centerX - 39, 26, 11, new SKColor(200, 209, 213));
             if (battery.Charging) Text(canvas, "+", centerX - 3.5f, 25, 11, SKColors.White);
         }
-        else if (media == null) Text(canvas, "Ready", right - 58, 29, 12, new SKColor(160, 169, 179));
+        else if (media == null && !focus.Active) Text(canvas, "Ready", right - 58, 29, 12, new SKColor(160, 169, 179));
+
+        if (media == null && focus.Active)
+            Text(canvas, Truncate(focus.Display, width - 120, 12), left + 52, 26, 12, new SKColor(130, 230, 190));
 
         if (media != null && height < 110 && height > 54)
         {
@@ -101,8 +104,8 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, "Desktop foundation is running.", left + 24, 97, 13, new SKColor(160, 169, 179));
             _paint.Color = new SKColor(255, 255, 255, 18);
             canvas.DrawLine(left + 24, 114, left + width - 24, 114, _paint);
-            Text(canvas, "Agent activity", left + 24, 140, 13, SKColors.White);
-            Text(canvas, "No integrations connected yet", left + 24, 161, 12, new SKColor(160, 169, 179));
+            Text(canvas, "Focus timer", left + 24, 140, 13, SKColors.White);
+            Text(canvas, focus.Active ? $"{focus.Label}: {focus.Display}" : "Start a timer from the right-click menu", left + 24, 161, 12, new SKColor(160, 169, 179));
             Text(canvas, "Hover to open · move away to close", left + 24, 198, 12, new SKColor(130, 230, 190));
             Text(canvas, "Right-click for menu", left + 24, 218, 11, new SKColor(160, 169, 179));
             }
@@ -113,6 +116,8 @@ internal sealed class IslandRenderer : IDisposable
                 string elapsed = TimeSpan.FromSeconds(media.CurrentPosition).ToString(@"m\:ss");
                 string total = TimeSpan.FromSeconds(Math.Max(0, media.Duration)).ToString(@"m\:ss");
                 Text(canvas, $"{elapsed} / {total}", left + 24, 118, 11, new SKColor(160, 169, 179));
+                if (focus.Active)
+                    Text(canvas, focus.Display, right - 78, 118, 11, new SKColor(130, 230, 190));
                 string[] visible = lyrics?.Visible(media.CurrentPosition) ?? new[] { "Looking for lyrics…" };
                 for (int i = 0; i < Math.Min(3, visible.Length); i++)
                     Text(canvas, Truncate(visible[i], width - 48, 12), left + 24, 140 + 17 * i, 12,

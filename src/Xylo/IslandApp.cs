@@ -11,7 +11,7 @@ internal sealed class IslandApp : IDisposable
 {
     public const float CanvasWidth = 440;
     private const float CanvasHeight = 250;
-    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6;
+    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7;
     private readonly WndProc _windowProcedure;
     private readonly IslandRenderer _renderer = new();
     private readonly Spring _width = new(initial: 180);
@@ -35,6 +35,7 @@ internal sealed class IslandApp : IDisposable
     private MediaService? _media;
     private LyricsService? _lyrics;
     private readonly ClipboardHistory _clipboard = new();
+    private readonly FocusTimer _focus = new();
     private bool _clipboardListening;
     private double _blinkStarted = -1;
 
@@ -223,6 +224,11 @@ internal sealed class IslandApp : IDisposable
                     }
                     _dirty = true;
                 }
+                else if (wParam.ToInt64() == FocusTickTimer)
+                {
+                    if (_focus.Tick()) KillTimer(hwnd, (UIntPtr)FocusTickTimer);
+                    _dirty = true;
+                }
                 return IntPtr.Zero;
             case 0x0218: // WM_POWERBROADCAST
                 RefreshBattery();
@@ -291,7 +297,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -333,6 +339,12 @@ internal sealed class IslandApp : IDisposable
             AppendMenu(menu, MF_STRING, (UIntPtr)1, _expanded ? "Collapse Xylo" : "Expand Xylo");
             AppendMenu(menu, MF_STRING, (UIntPtr)3, _settings.Detached ? "Configuration: Attach to top" : "Configuration: Float below top");
             AppendMenu(menu, MF_STRING, (UIntPtr)4, _clipboardListening ? "Disable clipboard history" : "Enable clipboard history");
+            AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, "");
+            AppendMenu(menu, MF_STRING, (UIntPtr)6, "Start focus (25 min)");
+            AppendMenu(menu, MF_STRING, (UIntPtr)7, "Start break (5 min)");
+            AppendMenu(menu, MF_STRING, (UIntPtr)8, "Start long break (15 min)");
+            AppendMenu(menu, MF_STRING, (UIntPtr)9, _focus.Running ? "Pause timer" : "Resume timer");
+            AppendMenu(menu, MF_STRING, (UIntPtr)10, "Clear timer");
             if (_clipboardListening && _clipboard.Items.Count > 0)
             {
                 AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, "");
@@ -367,6 +379,17 @@ internal sealed class IslandApp : IDisposable
             }
             else if (command == 4) ToggleClipboard();
             else if (command == 5) _clipboard.Clear();
+            else if (command == 6) StartFocus("Focus", 25 * 60);
+            else if (command == 7) StartFocus("Break", 5 * 60);
+            else if (command == 8) StartFocus("Long break", 15 * 60);
+            else if (command == 9)
+            {
+                _focus.Toggle();
+                if (_focus.Running) SetTimer(_hwnd, (UIntPtr)FocusTickTimer, 1000, IntPtr.Zero);
+                else KillTimer(_hwnd, (UIntPtr)FocusTickTimer);
+                _dirty = true;
+            }
+            else if (command == 10) { _focus.Clear(); KillTimer(_hwnd, (UIntPtr)FocusTickTimer); _dirty = true; }
             else if (command >= 100 && command < 110 && !_clipboard.Copy(_hwnd, (int)command - 100))
                 MessageBox(_hwnd, "Could not copy the selected item.", "Xylo", 0x10);
             PostMessage(_hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
@@ -397,6 +420,13 @@ internal sealed class IslandApp : IDisposable
         {
             MessageBox(_hwnd, "Clipboard setting could not be saved.", "Xylo", 0x10);
         }
+    }
+
+    private void StartFocus(string label, int seconds)
+    {
+        _focus.StartPreset(label, seconds);
+        SetTimer(_hwnd, (UIntPtr)FocusTickTimer, 1000, IntPtr.Zero);
+        _dirty = true;
     }
 
     private void SmokeTick()
