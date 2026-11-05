@@ -3,7 +3,8 @@ using System.Text.Json;
 
 namespace Xylo;
 
-internal sealed record WeatherSnapshot(string City, double Temperature, int Code)
+internal sealed record HourlyWeather(DateTime Time, double Temperature, int Code);
+internal sealed record WeatherSnapshot(string City, double Temperature, int Code, HourlyWeather[] Forecast)
 {
     public string Condition => Code switch
     {
@@ -56,12 +57,25 @@ internal sealed class WeatherService : IDisposable
         string city = root.TryGetProperty("city", out var name) && name.ValueKind == JsonValueKind.String ? name.GetString() ?? "" : "";
         if (city.Length > 80) city = city[..80];
         string url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat.ToString(CultureInfo.InvariantCulture) +
-            "&longitude=" + lon.ToString(CultureInfo.InvariantCulture) + "&current=temperature_2m,weather_code";
+            "&longitude=" + lon.ToString(CultureInfo.InvariantCulture) + "&current=temperature_2m,weather_code&hourly=temperature_2m,weather_code&forecast_days=2&timezone=auto";
         using var weather = await FetchJsonAsync(url, token);
         var current = weather.RootElement.GetProperty("current");
         double temperature = current.GetProperty("temperature_2m").GetDouble();
         if (temperature is < -100 or > 80) throw new InvalidOperationException("Invalid temperature.");
-        return new WeatherSnapshot(city, temperature, current.GetProperty("weather_code").GetInt32());
+        DateTime currentTime = DateTime.ParseExact(current.GetProperty("time").GetString()!, "yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture);
+        var hourly = weather.RootElement.GetProperty("hourly");
+        var times = hourly.GetProperty("time");
+        var temperatures = hourly.GetProperty("temperature_2m");
+        var codes = hourly.GetProperty("weather_code");
+        var forecast = new List<HourlyWeather>(4);
+        int length = Math.Min(times.GetArrayLength(), Math.Min(temperatures.GetArrayLength(), codes.GetArrayLength()));
+        for (int i = 0; i < length && forecast.Count < 4; i++)
+        {
+            if (!DateTime.TryParseExact(times[i].GetString(), "yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time) || time <= currentTime) continue;
+            double value = temperatures[i].GetDouble();
+            if (value is >= -100 and <= 80) forecast.Add(new HourlyWeather(time, value, codes[i].GetInt32()));
+        }
+        return new WeatherSnapshot(city, temperature, current.GetProperty("weather_code").GetInt32(), forecast.ToArray());
     }
 
     private static async Task<JsonDocument> FetchJsonAsync(string url, CancellationToken token)

@@ -14,10 +14,13 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Wi-Fi and Bluetooth connection alerts, configurable in the notch. Device names and Wi-Fi SSIDs depend on Windows permissions and device support.
 - Volume up/down HUD with a level bar using Windows Core Audio events, configurable in the notch.
 - Optional brightness HUD using Windows display events; availability depends on the display and driver.
+- The weather view shows the next four hourly forecasts when weather is enabled. Forecasts use the location estimated from the public IP address.
+- Task due dates and times are adjusted using controls in the notch; time changes in 15-minute steps.
+- Notification previews show a WhatsApp or call badge when Windows identifies WhatsApp and supplies matching call text. WhatsApp Web notifications may appear under the browser without enough information to identify their origin or call type.
 - Minimal animated eyes blink periodically without a continuously running animation loop.
 - Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.
-- Shows the current synchronized lyric line in the compact notch and upcoming lines when expanded. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.
-- Hover over the notch and choose AI Agent, Weather, To-do, or Music to switch views. Manage tasks and enable weather directly from their views; approval requests remain visible regardless of the selected view.
+- Shows synchronized lyrics in the Music view. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.
+- Hover over the notch to see today's date and time, then choose Agent, Weather, To-do, or Music to switch views. Manage tasks and enable weather directly from their views; approval requests remain visible regardless of the selected view.
 - Lyrics can be disabled in the notch controls to stop lyric requests while keeping media controls available.
 - Optional clipboard history in the notch controls: enable explicitly, then select a recent text item to copy it. History holds up to 20 entries in memory and is cleared on exit or when disabled. Clipboard entries may contain sensitive information.
 - Optional Windows notification previews can be enabled from the notch controls after granting Windows access. Availability depends on Windows permission and package identity; previews mirror content supplied by the originating app and may contain sensitive information.

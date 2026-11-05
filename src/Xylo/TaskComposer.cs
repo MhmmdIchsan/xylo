@@ -34,6 +34,22 @@ internal sealed class TaskComposer
 
     public void SelectAll() => _selectedAll = true;
 
+    private DateTime SelectedDate() => DateTime.TryParseExact(Due, new[] { "yyyy-MM-dd", "yyyy-MM-dd HH:mm" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value) ? value : DateTime.Today;
+    public void ShiftDate(int days)
+    {
+        var date = SelectedDate().AddDays(days);
+        Due = date.ToString(Due.Length > 10 ? "yyyy-MM-dd HH:mm" : "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        Error = "";
+    }
+    public void ShiftTime(int minutes)
+    {
+        var date = SelectedDate().AddMinutes(minutes);
+        Due = date.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        Error = "";
+    }
+    public void ClearDate() { Due = ""; Error = ""; }
+    public void ClearTime() { if (Due.Length > 10) Due = Due[..10]; Error = ""; }
+
     public void Insert(string value)
     {
         value = new string(value.Where(c => !char.IsControl(c)).ToArray());

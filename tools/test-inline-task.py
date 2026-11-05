@@ -24,7 +24,7 @@ try:
     def click(x, y):
         u.SendMessageW(hwnd, 0x0202, 0, int(x * scale) | (int(y * scale) << 16))
         time.sleep(0.3)
-    for x in (70, 160, 250, 340):
+    for x in (70, 140, 210, 280, 350):
         click(x, 60)
     click(330, 21)  # Open controls
     time.sleep(1)
@@ -47,17 +47,13 @@ try:
     click(70, 247)  # Controls -> Tasks
     click(70, 95)   # Tasks -> Add task
     time.sleep(0.8)
+    u.SendMessageW(hwnd, 0x0100, 0x0D, 0)
+    assert process.poll() is None, "Empty title unexpectedly saved"
     for char in "synthetic task":
         u.SendMessageW(hwnd, 0x0102, ord(char), 0)
-    click(70, 150)
-    for char in "invalid":
-        u.SendMessageW(hwnd, 0x0102, ord(char), 0)
-    u.SendMessageW(hwnd, 0x0100, 0x0D, 0)
-    assert process.poll() is None, "Invalid date unexpectedly saved"
-    for _ in "invalid":
-        u.SendMessageW(hwnd, 0x0100, 0x08, 0)
-    for char in "2030-12-24 13:30":
-        u.SendMessageW(hwnd, 0x0102, ord(char), 0)
+    click(272, 150) # Tomorrow
+    click(160, 185) # Hour +1
+    click(300, 185) # Minute +15
     u.SendMessageW(hwnd, 0x0100, 0x0D, 0)
     assert process.wait(timeout=5) == 0, "Task editor did not save the expected values"
     print("Inline task input, validation and save passed.")

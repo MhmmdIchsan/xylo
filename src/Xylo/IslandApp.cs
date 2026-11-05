@@ -11,7 +11,7 @@ internal sealed partial class IslandApp : IDisposable
 {
     public const float CanvasWidth = 440;
     private const float CanvasHeight = 420;
-    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9;
+    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9, ClockTimer = 10;
     private const uint PreviewMessage = 0x8004, NotificationStatusMessage = 0x8005, HudMessage = 0x8006;
     private readonly WndProc _windowProcedure;
     private readonly IslandRenderer _renderer = new();
@@ -153,6 +153,8 @@ internal sealed partial class IslandApp : IDisposable
         if (!expanded && (_composer != null || _review != null || _prompt != null || _panel != null)) return;
         if (_expanded == expanded) return;
         _expanded = expanded;
+        if (expanded) { _slide = 0; SetTimer(_hwnd, (UIntPtr)ClockTimer, 1000, IntPtr.Zero); }
+        else KillTimer(_hwnd, (UIntPtr)ClockTimer);
         UpdateTarget();
     }
 
@@ -215,7 +217,20 @@ internal sealed partial class IslandApp : IDisposable
                     float tx = (short)(lParam.ToInt64() & 0xffff) / _scale - (CanvasWidth - (float)_width.Value) / 2;
                     float ty = (short)((lParam.ToInt64() >> 16) & 0xffff) / _scale;
                     if (tx is >= 24 and <= 376 && ty is >= 75 and <= 109) { _composer.SelectField(false); FocusComposer(); }
-                    else if (tx is >= 24 and <= 376 && ty is >= 132 and <= 166) { _composer.SelectField(true); FocusComposer(); }
+                    else if (ty is >= 132 and <= 166)
+                    {
+                        if (tx is >= 24 and <= 56) _composer.ShiftDate(-1);
+                        else if (tx is >= 232 and <= 264) _composer.ShiftDate(1);
+                        else if (tx is >= 272 and <= 376) _composer.ClearDate();
+                    }
+                    else if (ty is >= 170 and <= 204)
+                    {
+                        if (tx is >= 24 and <= 56) _composer.ShiftTime(-60);
+                        else if (tx is >= 120 and <= 152) _composer.ShiftTime(60);
+                        else if (tx is >= 176 and <= 208) _composer.ShiftTime(-15);
+                        else if (tx is >= 264 and <= 296) _composer.ShiftTime(15);
+                        else if (tx is >= 304 and <= 376) _composer.ClearTime();
+                    }
                     else if (ty is >= 240 and <= 282 && tx is >= 202 and <= 278) CloseComposer();
                     else if (ty is >= 240 and <= 282 && tx is >= 286 and <= 376) SaveComposer();
                     _dirty = true;
@@ -268,16 +283,16 @@ internal sealed partial class IslandApp : IDisposable
                     float localX = mx - left;
                     if (my is >= 48 and <= 78 && localX is >= 24 and < 376)
                     {
-                        _slide = Math.Clamp((int)((localX - 24) / 88), 0, 3);
+                        _slide = Math.Clamp((int)((localX - 24) / 70.4f), 0, 4);
                         if (_taskTest) _testSlides |= 1 << _slide;
                         _dirty = true;
                         return IntPtr.Zero;
                     }
-                    if (_slide == 1 && !_settings.WeatherEnabled && my is >= 175 and <= 220 && localX is >= 24 and <= 180)
+                    if (_slide == 2 && !_settings.WeatherEnabled && my is >= 175 and <= 220 && localX is >= 24 and <= 180)
                     { ToggleWeather(); return IntPtr.Zero; }
-                    if (_slide == 2 && my is >= 175 and <= 220 && localX is >= 24 and <= 180)
+                    if (_slide == 3 && my is >= 175 and <= 220 && localX is >= 24 and <= 180)
                     { ShowMenu(); NavigatePanel(PanelPage.Tasks); return IntPtr.Zero; }
-                    if (_slide == 3 && _media?.Snapshot != null && my is >= 180 and <= 225)
+                    if (_slide == 4 && _media?.Snapshot != null && my is >= 180 and <= 225)
                     {
                         if (mx >= left + 120 && mx < left + 170) _media.Control("previous");
                         else if (mx >= left + 170 && mx < left + 220) _media.Control("toggle");
@@ -372,6 +387,7 @@ internal sealed partial class IslandApp : IDisposable
                 else if (_smokeTest && wParam.ToInt64() == SmokeTimer) SmokeTick();
                 else if (wParam.ToInt64() == BatteryTimer) RefreshBattery();
                 else if (wParam.ToInt64() == ChargeAnimationTimer) _dirty = true;
+                else if (wParam.ToInt64() == ClockTimer) _dirty = true;
                 else if (wParam.ToInt64() == BlinkTimer)
                 {
                     _blinkStarted = _clock.Elapsed.TotalSeconds;
@@ -622,7 +638,7 @@ internal sealed partial class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = _settings.Detached && _testSlides == 15 && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
+            TaskTestSucceeded = _settings.Detached && _testSlides == 31 && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true } && task.Due == DateTime.Today.AddDays(1).AddHours(1).AddMinutes(15);
         }
         else SaveTasks();
         CloseComposer();
@@ -649,7 +665,7 @@ internal sealed partial class IslandApp : IDisposable
         else if (control && key == VK_KEY_V) _composer.Insert(ClipboardHistory.ReadText(_hwnd) ?? "");
         else if (key == VK_ESCAPE) CloseComposer();
         else if (key == VK_RETURN) SaveComposer();
-        else if (key == 0x09) _composer.SelectField(!_composer.EditingDue);
+        else if (key == 0x09) _composer.SelectField(false);
         else if (key == VK_BACK) _composer.Backspace();
         else if (key == VK_DELETE) _composer.Delete();
         else if (key == VK_LEFT) _composer.Move(-1);

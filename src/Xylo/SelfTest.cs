@@ -31,7 +31,7 @@ internal static class SelfTest
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
             var result = WeatherService.FetchAsync(timeout.Token).GetAwaiter().GetResult();
-            return result.Temperature is >= -100 and <= 80 ? 0 : 1;
+            return result.Temperature is >= -100 and <= 80 && result.Forecast.Length == 4 && result.Forecast.Zip(result.Forecast.Skip(1), (a, b) => a.Time < b.Time).All(x => x) ? 0 : 1;
         }
         catch { return 1; }
     }
@@ -80,6 +80,9 @@ internal static class SelfTest
             && lowBattery?.Title == "Battery low" && plugged?.Title == "Power connected" && unknownPower == null
             && wifiConnected?.Title == "Wi-Fi connected" && wifiSame == null && muted.Title == "Muted" && muted.Progress == 0
             && VolumeHudService.Preview(0.7f, false, 0.5f).Title == "Volume up" && VolumeHudService.Preview(0.4f, false, 0.5f).Title == "Volume down"
+            && NotificationService.CreatePreview("WhatsApp", "Incoming call", "Alice").Kind == "whatsapp-call"
+            && NotificationService.CreatePreview("Chrome", "News", "WhatsApp mentioned").Kind == "notification"
+            && NotificationService.CreatePreview("Chrome", "web.whatsapp.com", "Hello").Kind == "whatsapp"
             && BrightnessHudService.Preview(55).Progress == 0.55f;
         return valid ? 0 : 1;
     }

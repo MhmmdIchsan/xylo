@@ -3,7 +3,7 @@ using Windows.UI.Notifications.Management;
 
 namespace Xylo;
 
-internal sealed record NotificationPreview(string App, string Title, string Body, float? Progress = null, bool IsHud = false, string HudSource = "");
+internal sealed record NotificationPreview(string App, string Title, string Body, float? Progress = null, bool IsHud = false, string HudSource = "", string Kind = "");
 
 internal sealed class NotificationService : IDisposable
 {
@@ -95,7 +95,7 @@ internal sealed class NotificationService : IDisposable
                     }
                     catch { /* Some apps provide a toast without readable text. */ }
                     if (!token.IsCancellationRequested)
-                        _received(new NotificationPreview(Short(app, 100), Short(string.IsNullOrEmpty(title) ? app : title, 200), Short(body, 500)));
+                        _received(CreatePreview(app, title, body));
                 }
                 seen = current;
                 initialized = true;
@@ -107,6 +107,12 @@ internal sealed class NotificationService : IDisposable
         finally { if (ReferenceEquals(_stop, run)) { _active = false; _statusChanged(); } run.Dispose(); }
     }
 
+    internal static NotificationPreview CreatePreview(string app, string title, string body)
+    {
+        bool whatsapp = app.Contains("whatsapp", StringComparison.OrdinalIgnoreCase) || title.Contains("web.whatsapp.com", StringComparison.OrdinalIgnoreCase);
+        bool call = whatsapp && new[] { "incoming call", "calling", "panggilan", "video call", "voice call" }.Any(word => title.Contains(word, StringComparison.OrdinalIgnoreCase) || body.Contains(word, StringComparison.OrdinalIgnoreCase));
+        return new NotificationPreview(Short(app, 100), Short(string.IsNullOrEmpty(title) ? app : title, 200), Short(body, 500), Kind: call ? "whatsapp-call" : whatsapp ? "whatsapp" : "notification");
+    }
     private static string Short(string text, int limit) => text.Length <= limit ? text : text[..limit] + "…";
     public void Stop() { var run = _stop; _stop = null; run?.Cancel(); _active = false; }
     public void Dispose() { _disposed = true; Stop(); }
