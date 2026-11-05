@@ -2,6 +2,35 @@ namespace Xylo;
 
 internal static class SelfTest
 {
+    public static int RunAgentInput()
+    {
+        try
+        {
+            using var bridge = new AgentBridge(() => { }, _ => { });
+            bridge.Start();
+            void Send(string kind, string request = "")
+            {
+                using var pipe = new System.IO.Pipes.NamedPipeClientStream(".", "xylo-agent", System.IO.Pipes.PipeDirection.InOut);
+                pipe.Connect(5000);
+                string json = System.Text.Json.JsonSerializer.Serialize(new { agent = "Codex", @event = kind, session = "xylo-selftest", project = "test", requestId = request, windowHandle = 1234, windowPid = 55 });
+                using var writer = new StreamWriter(pipe, new System.Text.UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
+                using var reader = new StreamReader(pipe, System.Text.Encoding.UTF8, leaveOpen: true);
+                writer.WriteLine(json);
+                if (reader.ReadLine() != "{}") throw new InvalidOperationException("Unexpected response");
+            }
+            Send("UserPromptSubmit");
+            Send("InputRequired", "r1");
+            bool waiting = bridge.Notice is { InputRequired: true } && bridge.FindActivity("Codex:xylo-selftest") is { Working: false, WindowHandle: 1234, WindowPid: 55 };
+            Send("InputResolved", "r1");
+            bool resumed = bridge.Notice == null && bridge.FindActivity("Codex:xylo-selftest") is { Working: true };
+            Send("Interrupt");
+            bool interrupted = bridge.FindActivity("Codex:xylo-selftest") is { Working: false, Interrupted: true, WindowHandle: 1234, WindowPid: 55 };
+            Send("SessionEnd");
+            return waiting && resumed && interrupted && bridge.Activity == null ? 0 : 1;
+        }
+        catch { return 1; }
+    }
+
     private static bool TestAgentAnimation()
     {
         var agent = new AgentActivity("Codex", "test", "test", true, DateTimeOffset.UtcNow);

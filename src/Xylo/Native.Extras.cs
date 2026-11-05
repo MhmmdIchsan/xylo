@@ -7,6 +7,12 @@ internal static partial class Native
     public delegate bool MonitorEnumProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
     [DllImport("user32.dll")]
     public static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")]
+    public static extern bool FlashWindow(IntPtr hwnd, bool invert);
     [DllImport("shcore.dll")]
     public static extern int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint x, out uint y);
     [DllImport("user32.dll", SetLastError = true)]

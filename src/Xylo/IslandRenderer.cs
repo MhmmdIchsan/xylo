@@ -74,7 +74,7 @@ internal sealed class IslandRenderer : IDisposable
         else if (approval != null)
             CenterText(canvas, Truncate(approval.Agent + " needs approval", width - 120, 12), left + width / 2, 26, 12, new SKColor(255, 185, 100));
         else if (notice != null)
-            CenterText(canvas, Truncate(notice.Agent + " needs approval", width - 120, 12), left + width / 2, 26, 12, new SKColor(255, 185, 100));
+            CenterText(canvas, Truncate(notice.Agent + (notice.InputRequired ? " needs input" : " needs approval"), width - 120, 12), left + width / 2, 26, 12, new SKColor(255, 185, 100));
         else if (preview != null)
         {
             if (!preview.IsHud) NotificationIcon(canvas, left + 62, 20, preview.Kind);
@@ -206,10 +206,10 @@ internal sealed class IslandRenderer : IDisposable
             }
             else if (notice != null)
             {
-                Text(canvas, notice.Agent + " needs approval", left + 24, 72, 16, SKColors.White);
+                Text(canvas, notice.Agent + (notice.InputRequired ? " needs your input" : " needs approval"), left + 24, 72, 16, SKColors.White);
                 Text(canvas, Truncate(notice.Tool, width - 48, 13), left + 24, 98, 13, new SKColor(255, 185, 100));
                 Text(canvas, Truncate(notice.Project, width - 48, 12), left + 24, 122, 12, new SKColor(160, 169, 179));
-                Text(canvas, "Review and respond in " + notice.Agent, left + 24, 160, 12, new SKColor(255, 185, 100));
+                Text(canvas, notice.InputRequired ? "Click to return to the agent window" : "Review and respond in " + notice.Agent, left + 24, 160, 12, new SKColor(255, 185, 100));
             }
             else if (preview != null)
             {

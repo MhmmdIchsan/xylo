@@ -279,7 +279,11 @@ internal sealed partial class IslandApp : IDisposable
                     HandlePanelClick(px, py);
                     return IntPtr.Zero;
                 }
-                if (_agents?.Notice != null) return IntPtr.Zero;
+                if (_agents?.Notice is { } notice)
+                {
+                    if (notice.InputRequired) RestoreAgentWindow(notice);
+                    return IntPtr.Zero;
+                }
                 if (_expanded)
                 {
                     float px = (short)(lParam.ToInt64() & 0xffff) / _scale - (CanvasWidth - (float)_width.Value) / 2;
@@ -543,6 +547,22 @@ internal sealed partial class IslandApp : IDisposable
     {
         if (_review == null && _composer == null && _prompt == null && _panel == null && _agents?.Pending is { } request && !request.Completion.Task.IsCompleted)
             _review = new ApprovalReview(request, _renderer.WrapReview);
+    }
+
+    private void RestoreAgentWindow(AgentNotice notice)
+    {
+        var activity = _agents?.FindActivity(notice.Session);
+        if (activity == null || activity.WindowHandle <= 0 || activity.WindowPid <= 0)
+        { ShowPrompt("Return to agent", "The original window was not identified. Open the agent directly to answer."); return; }
+        IntPtr target = new(activity.WindowHandle);
+        if (!IsWindow(target) || GetWindowThreadProcessId(target, out uint pid) == 0 || pid != (uint)activity.WindowPid)
+        { ShowPrompt("Return to agent", "The original window is no longer available. Open the agent directly to answer."); return; }
+        if (IsIconic(target)) ShowWindow(target, 9); // SW_RESTORE
+        if (!SetForegroundWindow(target))
+        {
+            FlashWindow(target, true);
+            ShowPrompt("Return to agent", "Windows highlighted the agent window on the taskbar; select it to answer.");
+        }
     }
 
     private void BuildSurface()

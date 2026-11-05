@@ -5,8 +5,8 @@ using System.Text.Json;
 namespace Xylo;
 
 internal sealed record AgentApproval(string Agent, string Session, string Tool, string Project, string Details, TaskCompletionSource<string> Completion);
-internal sealed record AgentActivity(string Agent, string Session, string Project, bool Working, DateTimeOffset Updated, bool Interrupted = false);
-internal sealed record AgentNotice(string Agent, string Session, string RequestId, string Tool, string Project, DateTimeOffset Updated);
+internal sealed record AgentActivity(string Agent, string Session, string Project, bool Working, DateTimeOffset Updated, bool Interrupted = false, long WindowHandle = 0, int WindowPid = 0);
+internal sealed record AgentNotice(string Agent, string Session, string RequestId, string Tool, string Project, DateTimeOffset Updated, bool InputRequired = false);
 
 // The pipe accepts only the current Windows user. Hook messages and approvals are never persisted.
 internal sealed class AgentBridge : IDisposable
@@ -23,7 +23,7 @@ internal sealed class AgentBridge : IDisposable
     public int PendingCount { get { lock (_lock) return _pending.Count; } }
     public AgentNotice? Notice
     {
-        get { lock (_lock) return _notices.Values.Where(n => DateTimeOffset.UtcNow - n.Updated < TimeSpan.FromMinutes(2)).OrderBy(n => n.Updated).FirstOrDefault(); }
+        get { lock (_lock) return _notices.Values.Where(n => DateTimeOffset.UtcNow - n.Updated < TimeSpan.FromMinutes(n.InputRequired ? 30 : 2)).OrderBy(n => n.Updated).FirstOrDefault(); }
     }
     public AgentActivity? Activity
     {
@@ -38,6 +38,7 @@ internal sealed class AgentBridge : IDisposable
     {
         get { lock (_lock) return _sessions.Values.Where(s => DateTimeOffset.UtcNow - s.Updated < TimeSpan.FromMinutes(30)).OrderByDescending(s => s.Working).ThenByDescending(s => s.Updated).Take(8).ToArray(); }
     }
+    public AgentActivity? FindActivity(string session) { lock (_lock) return _sessions.GetValueOrDefault(session); }
     public void Start() => _ = Task.Run(AcceptAsync);
 
     private async Task AcceptAsync()
@@ -98,6 +99,19 @@ internal sealed class AgentBridge : IDisposable
                                 _notices[requestId] = new(agent, session, requestId, Read(root, "tool"), Read(root, "project"), DateTimeOffset.UtcNow);
                             }
                             else if (kind == "PermissionResolved") _notices.Remove(requestId);
+                            else if (kind == "InputRequired" && requestId.Length is > 0 and <= 200)
+                            {
+                                string key = "input:" + session + ":" + requestId;
+                                if (_notices.Count >= 16 && !_notices.ContainsKey(key)) _notices.Remove(_notices.MinBy(pair => pair.Value.Updated).Key);
+                                _notices[key] = new(agent, session, requestId, "User input", Read(root, "project"), DateTimeOffset.UtcNow, true);
+                                if (_sessions.TryGetValue(session, out var waiting)) _sessions[session] = waiting with { Working = false, Updated = DateTimeOffset.UtcNow };
+                            }
+                            else if (kind == "InputResolved" && requestId.Length is > 0 and <= 200)
+                            {
+                                string key = "input:" + session + ":" + requestId;
+                                if (_notices.Remove(key) && !_notices.Values.Any(n => n.InputRequired && n.Session == session) && _sessions.TryGetValue(session, out var waiting))
+                                    _sessions[session] = waiting with { Working = true, Interrupted = false, Updated = DateTimeOffset.UtcNow };
+                            }
                             else if (kind == "SessionEnd")
                             {
                                 _sessions.Remove(session);
@@ -106,9 +120,12 @@ internal sealed class AgentBridge : IDisposable
                             else if (kind is "UserPromptSubmit" or "Stop" or "Interrupt")
                             {
                                 bool wasWorking = _sessions.TryGetValue(session, out var previous) && previous.Working;
+                                foreach (string key in _notices.Where(n => n.Value.Session == session && n.Value.InputRequired).Select(n => n.Key).ToArray()) _notices.Remove(key);
                                 if (_sessions.Count >= 32 && !_sessions.ContainsKey(session))
                                     _sessions.Remove(_sessions.MinBy(pair => pair.Value.Updated).Key);
-                                _sessions[session] = ActivityForEvent(agent, session, Read(root, "project"), kind);
+                                long handle = ReadInteger(root, "windowHandle"), pid = ReadInteger(root, "windowPid");
+                                _sessions[session] = ActivityForEvent(agent, session, Read(root, "project"), kind, previous,
+                                    handle > 0 && pid is > 0 and <= int.MaxValue ? handle : 0, pid is > 0 and <= int.MaxValue ? (int)pid : 0);
                                 if (kind == "Stop" && wasWorking) finished = _sessions[session];
                             }
                         }
@@ -143,8 +160,9 @@ internal sealed class AgentBridge : IDisposable
 
     private static string Read(JsonElement root, string key) =>
         root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
-    internal static AgentActivity ActivityForEvent(string agent, string session, string project, string kind) =>
-        new(agent, session, project, kind == "UserPromptSubmit", DateTimeOffset.UtcNow, kind == "Interrupt");
+    private static long ReadInteger(JsonElement root, string key) => root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out long number) ? number : 0;
+    internal static AgentActivity ActivityForEvent(string agent, string session, string project, string kind, AgentActivity? previous = null, long windowHandle = 0, int windowPid = 0) =>
+        new(agent, session, project, kind == "UserPromptSubmit", DateTimeOffset.UtcNow, kind == "Interrupt", windowHandle > 0 ? windowHandle : previous?.WindowHandle ?? 0, windowHandle > 0 ? windowPid : previous?.WindowPid ?? 0);
     private static async Task RespondAsync(NamedPipeServerStream pipe, string json, CancellationToken token)
     {
         await pipe.WriteAsync(Encoding.UTF8.GetBytes(json + "\n"), token);
