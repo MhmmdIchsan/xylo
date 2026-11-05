@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks, TaskComposer? composer)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -58,7 +58,11 @@ internal sealed class IslandRenderer : IDisposable
             canvas.DrawLine(eyeX + 3, 21 - eyeHeight, eyeX - 3, 21 + eyeHeight, _paint);
         }
         _paint.Style = SKPaintStyle.Fill;
-        if (composer != null)
+        if (prompt != null)
+            Text(canvas, "Attention", left + 52, 26, 12, SKColors.White);
+        else if (review != null)
+            Text(canvas, "Review request", left + 52, 26, 12, SKColors.White);
+        else if (composer != null)
             Text(canvas, composer.EditIndex == null ? "New task" : "Edit task", left + 52, 26, 12, SKColors.White);
         else if (approval != null)
             Text(canvas, approval.Agent + " needs approval", left + 52, 26, 12, new SKColor(255, 185, 100));
@@ -114,7 +118,29 @@ internal sealed class IslandRenderer : IDisposable
             _contentOpacity.Color = SKColors.White.WithAlpha((byte)(255 * reveal));
             canvas.SaveLayer(_contentOpacity);
             canvas.Translate(0, 8 * (1 - reveal));
-            if (composer != null)
+            if (prompt != null)
+            {
+                Text(canvas, Truncate(prompt.Title, 352, 16), left + 24, 72, 16, SKColors.White);
+                for (int i = 0; i < Math.Min(8, prompt.Lines.Length); i++)
+                    Text(canvas, prompt.Lines[i], left + 24, 102 + 17 * i, 12, new SKColor(200, 210, 210));
+                if (prompt.Confirm != null) DrawButton(canvas, left + 202, 240, 76, 42, "Cancel", false);
+                DrawButton(canvas, left + 286, 240, 90, 42, prompt.ActionLabel, true, danger: prompt.Confirm != null);
+            }
+            else if (review != null)
+            {
+                Text(canvas, "Review the complete request", left + 24, 67, 15, SKColors.White);
+                Text(canvas, $"Page {review.Page + 1} / {review.PageCount}", left + 24, 87, 11, new SKColor(160, 169, 179));
+                var lines = review.Lines.Skip(review.Page * ApprovalReview.LinesPerPage).Take(ApprovalReview.LinesPerPage);
+                int row = 0;
+                foreach (string line in lines) Text(canvas, line, left + 24, 107 + 16 * row++, 12, new SKColor(230, 235, 235));
+                DrawButton(canvas, left + 24, 304, 74, 34, "Previous", false, review.Page > 0);
+                DrawButton(canvas, left + 108, 304, 74, 34, "Next", false, review.Page < review.PageCount - 1);
+                if (!review.CanApprove) Text(canvas, "Read all pages before allowing", left + 193, 325, 10, new SKColor(255, 185, 100));
+                DrawButton(canvas, left + 24, 350, 100, 46, "Cancel", false);
+                DrawButton(canvas, left + 140, 350, 100, 46, "Deny", false);
+                DrawButton(canvas, left + 256, 350, 120, 46, "Allow", true, review.CanApprove);
+            }
+            else if (composer != null)
             {
                 Text(canvas, "Task", left + 24, 70, 12, new SKColor(160, 169, 179));
                 ComposerField(canvas, left + 24, 75, 352, composer.Title, !composer.EditingDue, composer);
@@ -208,14 +234,32 @@ internal sealed class IslandRenderer : IDisposable
         canvas.Restore();
     }
 
-    private void DrawButton(SKCanvas canvas, float x, float y, float width, float height, string label, bool primary)
+    internal string[] WrapReview(string text)
+    {
+        _font.Size = 12;
+        var lines = new List<string>();
+        foreach (string source in text.Split('\n'))
+        {
+            string current = "";
+            foreach (char ch in source)
+            {
+                if (current.Length > 0 && _font.MeasureText(current + ch) > 352)
+                { lines.Add(current); current = ""; }
+                current += ch;
+            }
+            lines.Add(current);
+        }
+        return lines.ToArray();
+    }
+
+    private void DrawButton(SKCanvas canvas, float x, float y, float width, float height, string label, bool primary, bool enabled = true, bool danger = false)
     {
         _paint.Style = SKPaintStyle.Fill;
-        _paint.Color = primary ? new SKColor(130, 230, 190) : new SKColor(255, 255, 255, 22);
+        _paint.Color = !enabled ? new SKColor(255, 255, 255, 10) : danger ? new SKColor(255, 150, 150) : primary ? new SKColor(130, 230, 190) : new SKColor(255, 255, 255, 22);
         canvas.DrawRoundRect(new SKRect(x, y, x + width, y + height), 10, 10, _paint);
         _font.Size = 13;
         Text(canvas, label, x + (width - _font.MeasureText(label)) / 2, y + 26, 13,
-            primary ? new SKColor(13, 25, 22) : SKColors.White);
+            !enabled ? new SKColor(100, 110, 110) : primary ? new SKColor(13, 25, 22) : SKColors.White);
     }
 
     private void DrawTransport(SKCanvas canvas, float x, float y, int direction, bool pause, bool skip)

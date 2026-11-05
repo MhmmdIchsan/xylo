@@ -8,6 +8,7 @@ import time
 
 user32 = ctypes.windll.user32
 user32.FindWindowW.restype = ctypes.c_void_p
+user32.GetDpiForWindow.argtypes = [ctypes.c_void_p]
 root = pathlib.Path(__file__).resolve().parents[1]
 agent = sys.argv[1] if len(sys.argv) > 1 else "codex"
 hook = root / "integrations" / agent / "xylo_hook.py"
@@ -27,6 +28,7 @@ for _ in range(30):
     time.sleep(0.1)
 if not window:
     raise SystemExit("Start Xylo before running the bridge integration test")
+time.sleep(1)  # The window can appear before the agent pipe starts listening.
 
 for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
     command = [sys.executable, str(hook)] + (["PreToolUse"] if agent == "antigravity" else [])
@@ -36,16 +38,11 @@ for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
     process.stdin.close()
     time.sleep(0.5)
     user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, 0)
-    dialog = None
-    for _ in range(30):
-        dialog = user32.FindWindowW("#32770", "Xylo — review agent request")
-        if dialog:
-            break
-        time.sleep(0.1)
-    if not dialog:
-        process.kill()
-        raise SystemExit("Review dialog did not appear")
-    user32.PostMessageW(ctypes.c_void_p(dialog), 0x111, choice, 0)
+    time.sleep(1)
+    scale = user32.GetDpiForWindow(ctypes.c_void_p(window)) / 96
+    x = int(({6: 336, 7: 210, 2: 94}[choice]) * scale)
+    y = int(373 * scale)
+    user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, x | (y << 16))
     process.wait(timeout=5)
     output = process.stdout.read()
     if agent == "antigravity":
@@ -60,3 +57,29 @@ for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
         actual = json.loads(output)["hookSpecificOutput"]["decision"]["behavior"]
         assert actual == expected, (actual, expected)
 print("Synthetic allow, deny, and defer approval flows passed.")
+
+if agent == "codex":
+    event["tool_input"]["command"] = "echo " + "a" * 1800
+    process = subprocess.Popen([sys.executable, str(hook)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
+    try:
+        process.stdin.write(json.dumps(event).encode())
+        process.stdin.close()
+        time.sleep(0.5)
+        user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, 0)
+        time.sleep(1)
+        scale = user32.GetDpiForWindow(ctypes.c_void_p(window)) / 96
+        def click(x, y):
+            user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, int(x * scale) | (int(y * scale) << 16))
+            time.sleep(0.05)
+        click(336, 373)
+        assert process.poll() is None, "Allow was accepted before all pages were reviewed"
+        for _ in range(20):
+            click(165, 320)
+        click(336, 373)
+        process.wait(timeout=5)
+        assert json.loads(process.stdout.read())["hookSpecificOutput"]["decision"]["behavior"] == "allow"
+        print("Multi-page review requires all pages before allow.")
+    finally:
+        if process.poll() is None:
+            process.kill()

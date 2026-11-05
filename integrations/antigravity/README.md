@@ -21,4 +21,4 @@ For optional tool review, add a separate named hook:
 }
 ```
 
-This review hook runs on **every matching tool call**, including those the agent's normal policy might allow. Xylo Yes returns `auto_approve`, No returns `deny`, and Cancel or unavailable Xylo returns `allow`, which delegates to the agent's remaining hooks and default policy. Explicit user-configured rules still apply. Review the full request before deciding. This adapter has been tested with synthetic hook inputs; a live Antigravity installation has not yet been tested. See the [Antigravity hook reference](https://antigravity.google/docs/hooks).
+This review hook runs on **every matching tool call**, including those the agent's normal policy might allow. Xylo Allow returns `auto_approve`, Deny returns `deny`, and Cancel or unavailable Xylo returns `allow`, which delegates to the agent's remaining hooks and default policy. Explicit user-configured rules still apply. Review the full request before deciding. This adapter has been tested with synthetic hook inputs; a live Antigravity installation has not yet been tested. See the [Antigravity hook reference](https://antigravity.google/docs/hooks).

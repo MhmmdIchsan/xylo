@@ -1,6 +1,6 @@
 # Claude Code approvals
 
-Xylo supports Claude Code `PermissionRequest`, `UserPromptSubmit`, `Stop`, and `SessionEnd` hooks. It presents the complete request in a review dialog; Yes allows, No denies, and Cancel leaves the decision to Claude Code. If Xylo is unavailable or the request times out, the hook returns no decision. The `PermissionRequest` event does not cover every sandbox network prompt; see the [Claude Code hook reference](https://code.claude.com/docs/en/hooks#permissionrequest).
+Xylo supports Claude Code `PermissionRequest`, `UserPromptSubmit`, `Stop`, and `SessionEnd` hooks. It presents the complete request in the notch; Allow permits, Deny rejects, and Cancel leaves the decision to Claude Code. All pages must be visited before allowing. If Xylo is unavailable or the request times out, the hook returns no decision. The `PermissionRequest` event does not cover every sandbox network prompt; see the [Claude Code hook reference](https://code.claude.com/docs/en/hooks#permissionrequest).
 
 Merge these entries into the existing `hooks` object in `~/.claude/settings.json` or a project's `.claude/settings.json`, replacing the example path with the absolute path to this checkout. Python must be available as `python`. Preserve any existing hooks.
 

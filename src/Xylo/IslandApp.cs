@@ -10,7 +10,7 @@ namespace Xylo;
 internal sealed class IslandApp : IDisposable
 {
     public const float CanvasWidth = 440;
-    private const float CanvasHeight = 320;
+    private const float CanvasHeight = 420;
     private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9;
     private const uint PreviewMessage = 0x8004, NotificationStatusMessage = 0x8005;
     private readonly WndProc _windowProcedure;
@@ -47,6 +47,8 @@ internal sealed class IslandApp : IDisposable
     private bool _clipboardListening;
     private double _blinkStarted = -1;
     private TaskComposer? _composer;
+    private ApprovalReview? _review;
+    private InlinePrompt? _prompt;
     private IntPtr _previousForeground;
     private IntPtr _originalWindowStyle;
 
@@ -136,7 +138,7 @@ internal sealed class IslandApp : IDisposable
     private void SetExpanded(bool expanded)
     {
         KillTimer(_hwnd, (UIntPtr)CollapseTimer);
-        if (!expanded && _composer != null) return;
+        if (!expanded && (_composer != null || _review != null || _prompt != null)) return;
         if (_expanded == expanded) return;
         _expanded = expanded;
         UpdateTarget();
@@ -145,8 +147,8 @@ internal sealed class IslandApp : IDisposable
     private void UpdateTarget()
     {
         bool needsDetail = _media?.Snapshot != null || _agents?.Pending != null || _agents?.Notice != null || _preview != null;
-        double targetWidth = _expanded ? 400 : (needsDetail ? 400 : _agents?.Activity != null ? 260 : 180);
-        double targetHeight = _composer != null ? 300 : _expanded ? 236 : (needsDetail ? 68 : 42);
+        double targetWidth = _prompt != null || _review != null || _composer != null || _expanded ? 400 : (needsDetail ? 400 : _agents?.Activity != null ? 260 : 180);
+        double targetHeight = _prompt != null ? 300 : _review != null ? 400 : _composer != null ? 300 : _expanded ? 236 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
         _width.Target = targetWidth;
         _height.Target = targetHeight;
@@ -188,6 +190,14 @@ internal sealed class IslandApp : IDisposable
                 if (!_menuOpen) SetTimer(hwnd, (UIntPtr)CollapseTimer, 180, IntPtr.Zero);
                 return IntPtr.Zero;
             case WM_LBUTTONUP:
+                if (_prompt != null)
+                {
+                    float px = (short)(lParam.ToInt64() & 0xffff) / _scale - (CanvasWidth - (float)_width.Value) / 2;
+                    float py = (short)((lParam.ToInt64() >> 16) & 0xffff) / _scale;
+                    if (py is >= 240 and <= 282 && px is >= 202 and <= 278) ClosePrompt(false);
+                    else if (py is >= 240 and <= 282 && px is >= 286 and <= 376) ClosePrompt(true);
+                    return IntPtr.Zero;
+                }
                 if (_composer != null)
                 {
                     float tx = (short)(lParam.ToInt64() & 0xffff) / _scale - (CanvasWidth - (float)_width.Value) / 2;
@@ -199,11 +209,27 @@ internal sealed class IslandApp : IDisposable
                     _dirty = true;
                     return IntPtr.Zero;
                 }
+                if (_review != null)
+                {
+                    float rx = (short)(lParam.ToInt64() & 0xffff) / _scale - (CanvasWidth - (float)_width.Value) / 2;
+                    float ry = (short)((lParam.ToInt64() >> 16) & 0xffff) / _scale;
+                    if (_height.Value >= 390)
+                    {
+                        if (ry is >= 304 and <= 338 && rx is >= 24 and <= 98) _review.Previous();
+                        else if (ry is >= 304 and <= 338 && rx is >= 108 and <= 182) _review.Next();
+                        else if (ry is >= 350 and <= 396 && rx is >= 24 and <= 124) RespondToApproval("defer");
+                        else if (ry is >= 350 and <= 396 && rx is >= 140 and <= 240) RespondToApproval("deny");
+                        else if (ry is >= 350 and <= 396 && rx is >= 256 and <= 376 && _review.CanApprove) RespondToApproval("allow");
+                    }
+                    _dirty = true;
+                    return IntPtr.Zero;
+                }
                 if (_agents?.Pending is { } request)
                 {
-                    string details = $"{request.Agent} requests approval\n\nProject: {request.Project}\nTool: {request.Tool}\n\n{request.Details}\n\nAllow this action?";
-                    int response = MessageBox(_hwnd, details, "Xylo — review agent request", 0x123);
-                    request.Completion.TrySetResult(response == 6 ? "allow" : response == 7 ? "deny" : "defer");
+                    _review = new ApprovalReview(request, _renderer.WrapReview);
+                    _expanded = true;
+                    UpdateTarget();
+                    _dirty = true;
                     return IntPtr.Zero;
                 }
                 if (_agents?.Notice != null) return IntPtr.Zero;
@@ -223,6 +249,7 @@ internal sealed class IslandApp : IDisposable
                 return IntPtr.Zero;
             case WM_APP_UPDATE:
                 _lyrics?.Update(_media?.Snapshot);
+                if (_review != null && !ReferenceEquals(_agents?.Pending, _review.Request)) _review = null;
                 if (_agents?.Notice != null) SetTimer(hwnd, (UIntPtr)NoticeTimer, 5000, IntPtr.Zero);
                 else KillTimer(hwnd, (UIntPtr)NoticeTimer);
                 UpdateTarget();
@@ -235,7 +262,7 @@ internal sealed class IslandApp : IDisposable
                 if (_notifications != null && !_notifications.Requesting)
                 {
                     if (_notificationPrompt && !_notifications.Active && _notifications.LastError != null)
-                        MessageBox(hwnd, _notifications.LastError, "Xylo notifications", 0x10);
+                        ShowPrompt("Notifications", _notifications.LastError);
                     if (_notificationPrompt && _notifications.Active)
                     {
                         _settings.NotificationsEnabled = true;
@@ -251,9 +278,18 @@ internal sealed class IslandApp : IDisposable
                 Toggle();
                 return IntPtr.Zero;
             case WM_RBUTTONUP:
-                if (_composer != null) return IntPtr.Zero;
+                if (_composer != null || _review != null || _prompt != null) return IntPtr.Zero;
                 ShowMenu();
                 return IntPtr.Zero;
+            case WM_MOUSEWHEEL:
+                if (_review != null)
+                {
+                    int delta = (short)((wParam.ToInt64() >> 16) & 0xffff);
+                    if (delta < 0) _review.Next(); else if (delta > 0) _review.Previous();
+                    _dirty = true;
+                    return IntPtr.Zero;
+                }
+                break;
             case WM_TRAYICON:
                 if ((uint)lParam.ToInt64() == WM_RBUTTONUP) ShowMenu();
                 else if ((uint)lParam.ToInt64() == WM_LBUTTONUP) Toggle();
@@ -306,9 +342,11 @@ internal sealed class IslandApp : IDisposable
                 if (_composer != null) { _composer.Focused = false; _dirty = true; }
                 return IntPtr.Zero;
             case WM_KEYDOWN:
+                if (_prompt != null) { if ((int)wParam.ToInt64() == VK_ESCAPE) ClosePrompt(false); return IntPtr.Zero; }
                 if (_composer != null) { HandleComposerKey((int)wParam.ToInt64()); return IntPtr.Zero; }
                 break;
             case 0x0102: // WM_CHAR
+                if (_prompt != null) return IntPtr.Zero;
                 if (_composer != null)
                 {
                     char ch = (char)wParam.ToInt64();
@@ -381,7 +419,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done), _composer);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done), _composer, _review, _prompt);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -477,7 +515,7 @@ internal sealed class IslandApp : IDisposable
                 catch (Exception error) when (error is IOException or UnauthorizedAccessException)
                 {
                     _settings.Detached = previous;
-                    MessageBox(_hwnd, "Could not save Xylo configuration.", "Xylo", 0x10);
+                    ShowPrompt("Configuration", "Could not save Xylo configuration.");
                 }
                 _y = _settings.Detached ? (int)(12 * _scale) : 0;
                 _dirty = true;
@@ -512,7 +550,7 @@ internal sealed class IslandApp : IDisposable
             }
             else if (command == 16)
             {
-                if (_settings.Tasks.Count >= 30) MessageBox(_hwnd, "Xylo supports up to 30 tasks.", "Xylo tasks", 0x40);
+                if (_settings.Tasks.Count >= 30) ShowPrompt("Tasks", "Xylo supports up to 30 tasks.");
                 else BeginComposer(null);
             }
             else if (command >= 200 && command < 230 && command - 200 < _settings.Tasks.Count)
@@ -528,12 +566,11 @@ internal sealed class IslandApp : IDisposable
             }
             else if (command >= 400 && command < 430 && command - 400 < _settings.Tasks.Count)
             {
-                int index = (int)command - 400;
-                if (MessageBox(_hwnd, "Delete this task?\n\n" + _settings.Tasks[index].Title, "Xylo tasks", 0x124) == 6)
-                { _settings.Tasks.RemoveAt(index); SaveTasks(); }
+                var task = _settings.Tasks[(int)command - 400];
+                ShowPrompt("Delete task?", task.Title, "Delete", () => { if (_settings.Tasks.Remove(task)) SaveTasks(); });
             }
             else if (command >= 100 && command < 110 && !_clipboard.Copy(_hwnd, (int)command - 100))
-                MessageBox(_hwnd, "Could not copy the selected item.", "Xylo", 0x10);
+                ShowPrompt("Clipboard", "Could not copy the selected item.");
             PostMessage(_hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
         }
         finally
@@ -551,7 +588,7 @@ internal sealed class IslandApp : IDisposable
         bool enable = !_clipboardListening;
         if (enable && !AddClipboardFormatListener(_hwnd))
         {
-            MessageBox(_hwnd, "Could not enable clipboard history.", "Xylo", 0x10);
+            ShowPrompt("Clipboard", "Could not enable clipboard history.");
             return;
         }
         if (!enable) { RemoveClipboardFormatListener(_hwnd); _clipboard.Clear(); }
@@ -560,7 +597,7 @@ internal sealed class IslandApp : IDisposable
         try { _settings.Save(); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            MessageBox(_hwnd, "Clipboard setting could not be saved.", "Xylo", 0x10);
+            ShowPrompt("Clipboard", "Clipboard setting could not be saved.");
         }
     }
 
@@ -575,7 +612,7 @@ internal sealed class IslandApp : IDisposable
     {
         try { _settings.Save(); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { MessageBox(_hwnd, "Tasks could not be saved; changes remain available until Xylo exits.", "Xylo tasks", 0x10); }
+        { ShowPrompt("Tasks", "Tasks could not be saved; changes remain available until Xylo exits."); }
         _dirty = true;
     }
 
@@ -587,6 +624,28 @@ internal sealed class IslandApp : IDisposable
         _expanded = true;
         UpdateTarget();
         FocusComposer();
+        _dirty = true;
+    }
+
+    private void ShowPrompt(string title, string message, string actionLabel = "OK", Action? confirm = null)
+    {
+        _prompt = new InlinePrompt(title, _renderer.WrapReview(ApprovalReview.SafeDisplay(message)), actionLabel, confirm);
+        _expanded = true;
+        UpdateTarget();
+        _dirty = true;
+    }
+
+    private void ClosePrompt(bool confirmed)
+    {
+        var prompt = _prompt;
+        _prompt = null;
+        if (confirmed) prompt?.Confirm?.Invoke();
+        if (_prompt == null && _composer == null && _review == null)
+        {
+            GetCursorPos(out var cursor);
+            _expanded = IsInsidePill((cursor.X - _x) / _scale, (cursor.Y - _y) / _scale);
+        }
+        UpdateTarget();
         _dirty = true;
     }
 
@@ -608,7 +667,7 @@ internal sealed class IslandApp : IDisposable
         SetWindowLongPtr(_hwnd, -20, _originalWindowStyle);
         if (restoreFocus && _previousForeground != IntPtr.Zero && IsWindow(_previousForeground)) SetForegroundWindow(_previousForeground);
         GetCursorPos(out var cursor);
-        _expanded = IsInsidePill((cursor.X - _x) / _scale, (cursor.Y - _y) / _scale);
+        _expanded = _prompt != null || IsInsidePill((cursor.X - _x) / _scale, (cursor.Y - _y) / _scale);
         UpdateTarget();
         _dirty = true;
     }
@@ -628,6 +687,18 @@ internal sealed class IslandApp : IDisposable
         else SaveTasks();
         CloseComposer();
         if (_taskTest) PostMessage(_hwnd, 0x0010, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    private void RespondToApproval(string decision)
+    {
+        var review = _review;
+        if (review == null || !ReferenceEquals(_agents?.Pending, review.Request)) { _review = null; UpdateTarget(); return; }
+        if (decision == "allow" && !review.CanApprove) return;
+        review.Request.Completion.TrySetResult(decision);
+        _review = null;
+        GetCursorPos(out var cursor);
+        _expanded = IsInsidePill((cursor.X - _x) / _scale, (cursor.Y - _y) / _scale);
+        UpdateTarget();
     }
 
     private void HandleComposerKey(int key)
