@@ -17,7 +17,8 @@ internal sealed class AgentBridge : IDisposable
     private readonly Dictionary<string, AgentActivity> _sessions = new();
     private readonly Dictionary<string, AgentNotice> _notices = new();
     private readonly Action _changed;
-    public AgentBridge(Action changed) => _changed = changed;
+    private readonly Action<AgentActivity> _finished;
+    public AgentBridge(Action changed, Action<AgentActivity> finished) { _changed = changed; _finished = finished; }
     public AgentApproval? Pending { get { lock (_lock) return _pending.FirstOrDefault(); } }
     public int PendingCount { get { lock (_lock) return _pending.Count; } }
     public AgentNotice? Notice
@@ -82,6 +83,7 @@ internal sealed class AgentBridge : IDisposable
                     string session = agent + ":" + Read(root, "session");
                     if (session.Length > 0 && session.Length <= 200)
                     {
+                        AgentActivity? finished = null;
                         lock (_lock)
                         {
                             string requestId = Read(root, "requestId");
@@ -99,11 +101,14 @@ internal sealed class AgentBridge : IDisposable
                             }
                             else if (kind is "UserPromptSubmit" or "Stop")
                             {
+                                bool wasWorking = _sessions.TryGetValue(session, out var previous) && previous.Working;
                                 if (_sessions.Count >= 32 && !_sessions.ContainsKey(session))
                                     _sessions.Remove(_sessions.MinBy(pair => pair.Value.Updated).Key);
                                 _sessions[session] = new(agent, session, Read(root, "project"), kind == "UserPromptSubmit", DateTimeOffset.UtcNow);
+                                if (kind == "Stop" && wasWorking) finished = _sessions[session];
                             }
                         }
+                        if (finished != null) _finished(finished);
                         _changed();
                     }
                     await RespondAsync(pipe, "{}", timeout.Token);

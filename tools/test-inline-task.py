@@ -26,6 +26,8 @@ try:
         time.sleep(0.3)
     for x in (70, 140, 210, 280, 350):
         click(x, 60)
+    click(350, 200) # Disable lyrics in Music
+    click(350, 200) # Re-enable lyrics in Music
     click(330, 21)  # Open controls
     time.sleep(1)
     click(230, 345) # Controls -> next page

@@ -65,6 +65,7 @@ internal sealed partial class IslandApp : IDisposable
         _smokeTest = smokeTest;
         _taskTest = taskTest;
         _settings = smokeTest || taskTest ? new Settings { Transient = true, ConnectivityAlertsEnabled = false, VolumeHudEnabled = false } : Settings.Load();
+        _slide = Math.Clamp(_settings.DashboardSlide, 0, 4);
         _windowProcedure = WindowProcedure;
     }
 
@@ -90,7 +91,8 @@ internal sealed partial class IslandApp : IDisposable
             _notifications = new NotificationService(EnqueueNotification,
                 () => PostMessage(_hwnd, NotificationStatusMessage, IntPtr.Zero, IntPtr.Zero));
             if (_settings.NotificationsEnabled) _notifications.Start(false);
-            _agents = new AgentBridge(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
+            _agents = new AgentBridge(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero),
+                activity => EnqueueNotification(new NotificationPreview("AI Agent", activity.Agent + " finished", activity.Project)));
             _agents.Start();
             if (_settings.LyricsEnabled) StartLyrics();
             _media = new MediaService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
@@ -103,6 +105,7 @@ internal sealed partial class IslandApp : IDisposable
         RefreshBattery();
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BatteryTimer, 60000, IntPtr.Zero);
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BlinkTimer, 8000, IntPtr.Zero);
+        if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)ClockTimer, 60000, IntPtr.Zero);
         BuildSurface();
         Draw();
         ShowWindow(_hwnd, SW_SHOWNOACTIVATE);
@@ -153,15 +156,14 @@ internal sealed partial class IslandApp : IDisposable
         if (!expanded && (_composer != null || _review != null || _prompt != null || _panel != null)) return;
         if (_expanded == expanded) return;
         _expanded = expanded;
-        if (expanded) { _slide = 0; SetTimer(_hwnd, (UIntPtr)ClockTimer, 1000, IntPtr.Zero); }
-        else KillTimer(_hwnd, (UIntPtr)ClockTimer);
+        if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)ClockTimer, expanded ? 1000u : 60000u, IntPtr.Zero);
         UpdateTarget();
     }
 
     private void UpdateTarget()
     {
-        bool needsDetail = _media?.Snapshot != null || _agents?.Pending != null || _agents?.Notice != null || _preview != null;
-        double targetWidth = _prompt != null || _review != null || _composer != null || _panel != null || _expanded ? 400 : (needsDetail ? 400 : _agents?.Activity != null ? 260 : 180);
+        bool needsDetail = (_slide == 4 && _media?.Snapshot != null) || _agents?.Pending != null || _agents?.Notice != null || _preview != null;
+        double targetWidth = _prompt != null || _review != null || _composer != null || _panel != null || _expanded ? 400 : (needsDetail ? 400 : _slide == 1 && _agents?.Activity != null ? 300 : 220);
         double targetHeight = _prompt != null ? 300 : _review != null ? 400 : _composer != null ? 300 : _panel != null ? 380 : _expanded ? 236 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
         _width.Target = targetWidth;
@@ -284,7 +286,12 @@ internal sealed partial class IslandApp : IDisposable
                     if (my is >= 48 and <= 78 && localX is >= 24 and < 376)
                     {
                         _slide = Math.Clamp((int)((localX - 24) / 70.4f), 0, 4);
+                        _settings.DashboardSlide = _slide;
+                        try { _settings.Save(); }
+                        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                        { ShowPrompt("View", "Could not save the selected view."); }
                         if (_taskTest) _testSlides |= 1 << _slide;
+                        UpdateTarget();
                         _dirty = true;
                         return IntPtr.Zero;
                     }
@@ -292,6 +299,8 @@ internal sealed partial class IslandApp : IDisposable
                     { ToggleWeather(); return IntPtr.Zero; }
                     if (_slide == 3 && my is >= 175 and <= 220 && localX is >= 24 and <= 180)
                     { ShowMenu(); NavigatePanel(PanelPage.Tasks); return IntPtr.Zero; }
+                    if (_slide == 4 && my is >= 180 and <= 220 && localX is >= 290 and <= 376)
+                    { ToggleLyrics(); return IntPtr.Zero; }
                     if (_slide == 4 && _media?.Snapshot != null && my is >= 180 and <= 225)
                     {
                         if (mx >= left + 120 && mx < left + 170) _media.Control("previous");
@@ -343,6 +352,7 @@ internal sealed partial class IslandApp : IDisposable
                     _notificationPrompt = false;
                     if (_panel == PanelPage.Home) InvalidatePanel();
                 }
+                _dirty = true;
                 return IntPtr.Zero;
             case 0x031D: // WM_CLIPBOARDUPDATE
                 if (_clipboardListening) _clipboard.Capture(hwnd);
@@ -503,7 +513,7 @@ internal sealed partial class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();

@@ -22,6 +22,7 @@ internal sealed class Settings
     public bool VolumeHudEnabled { get; set; } = true;
     public bool BrightnessHudEnabled { get; set; }
     public bool LyricsEnabled { get; set; } = true;
+    public int DashboardSlide { get; set; }
     public List<TaskItem> Tasks { get; set; } = new();
     [JsonIgnore]
     internal bool Transient { get; set; }

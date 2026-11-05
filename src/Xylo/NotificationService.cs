@@ -13,6 +13,8 @@ internal sealed class NotificationService : IDisposable
     private volatile bool _active;
     private volatile bool _requesting;
     private volatile bool _disposed;
+    private int _unreadCount;
+    public int UnreadCount => Volatile.Read(ref _unreadCount);
     public bool Active => _active;
     public bool Requesting => _requesting;
     public string? LastError { get; private set; }
@@ -79,6 +81,7 @@ internal sealed class NotificationService : IDisposable
                 }
                 var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast);
                 token.ThrowIfCancellationRequested();
+                if (Interlocked.Exchange(ref _unreadCount, notifications.Count) != notifications.Count) _statusChanged();
                 var current = new HashSet<uint>();
                 foreach (var notification in notifications)
                 {
@@ -114,6 +117,6 @@ internal sealed class NotificationService : IDisposable
         return new NotificationPreview(Short(app, 100), Short(string.IsNullOrEmpty(title) ? app : title, 200), Short(body, 500), Kind: call ? "whatsapp-call" : whatsapp ? "whatsapp" : "notification");
     }
     private static string Short(string text, int limit) => text.Length <= limit ? text : text[..limit] + "…";
-    public void Stop() { var run = _stop; _stop = null; run?.Cancel(); _active = false; }
+    public void Stop() { var run = _stop; _stop = null; run?.Cancel(); _active = false; Interlocked.Exchange(ref _unreadCount, 0); }
     public void Dispose() { _disposed = true; Stop(); }
 }
