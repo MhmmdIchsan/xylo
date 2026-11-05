@@ -76,7 +76,7 @@ internal sealed class AgentBridge : IDisposable
                 var root = json.RootElement;
                 string kind = Read(root, "event");
                 string agent = Read(root, "agent");
-                if (agent is not ("Codex" or "Claude Code" or "Cursor" or "OpenCode")) return;
+                if (agent is not ("Codex" or "Claude Code" or "Cursor" or "OpenCode" or "Antigravity")) return;
                 if (kind != "PermissionRequest")
                 {
                     string session = agent + ":" + Read(root, "session");
