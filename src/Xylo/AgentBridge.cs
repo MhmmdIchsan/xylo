@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace Xylo;
 
 internal sealed record AgentApproval(string Agent, string Session, string Tool, string Project, string Details, TaskCompletionSource<string> Completion);
-internal sealed record AgentActivity(string Agent, string Session, string Project, bool Working, DateTimeOffset Updated);
+internal sealed record AgentActivity(string Agent, string Session, string Project, bool Working, DateTimeOffset Updated, bool Interrupted = false);
 internal sealed record AgentNotice(string Agent, string Session, string RequestId, string Tool, string Project, DateTimeOffset Updated);
 
 // The pipe accepts only the current Windows user. Hook messages and approvals are never persisted.
@@ -103,12 +103,12 @@ internal sealed class AgentBridge : IDisposable
                                 _sessions.Remove(session);
                                 foreach (string key in _notices.Where(n => n.Value.Session == session).Select(n => n.Key).ToArray()) _notices.Remove(key);
                             }
-                            else if (kind is "UserPromptSubmit" or "Stop")
+                            else if (kind is "UserPromptSubmit" or "Stop" or "Interrupt")
                             {
                                 bool wasWorking = _sessions.TryGetValue(session, out var previous) && previous.Working;
                                 if (_sessions.Count >= 32 && !_sessions.ContainsKey(session))
                                     _sessions.Remove(_sessions.MinBy(pair => pair.Value.Updated).Key);
-                                _sessions[session] = new(agent, session, Read(root, "project"), kind == "UserPromptSubmit", DateTimeOffset.UtcNow);
+                                _sessions[session] = ActivityForEvent(agent, session, Read(root, "project"), kind);
                                 if (kind == "Stop" && wasWorking) finished = _sessions[session];
                             }
                         }
@@ -143,6 +143,8 @@ internal sealed class AgentBridge : IDisposable
 
     private static string Read(JsonElement root, string key) =>
         root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
+    internal static AgentActivity ActivityForEvent(string agent, string session, string project, string kind) =>
+        new(agent, session, project, kind == "UserPromptSubmit", DateTimeOffset.UtcNow, kind == "Interrupt");
     private static async Task RespondAsync(NamedPipeServerStream pipe, string json, CancellationToken token)
     {
         await pipe.WriteAsync(Encoding.UTF8.GetBytes(json + "\n"), token);

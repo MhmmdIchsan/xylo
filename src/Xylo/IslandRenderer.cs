@@ -55,17 +55,13 @@ internal sealed class IslandRenderer : IDisposable
         float eyeHeight = 4.0f - blink * 3.5f;
         _paint.StrokeWidth = 2;
         _paint.StrokeCap = SKStrokeCap.Round;
-        if (agent?.Working == true)
-        {
-            canvas.Save();
-            canvas.RotateDegrees((float)(seconds * 180 % 360), left + 27.5f, 21);
-        }
+        float thinking = agent?.Working == true ? (float)Math.Sin(seconds * 1.8) * 1.1f : 0;
+        if (agent?.Working == true) eyeHeight += (float)Math.Sin(seconds * 1.8) * 0.55f;
         foreach (float eyeX in new[] { left + 22, left + 33 })
         {
-            canvas.DrawLine(eyeX - 3, 21 - eyeHeight, eyeX + 3, 21 + eyeHeight, _paint);
-            canvas.DrawLine(eyeX + 3, 21 - eyeHeight, eyeX - 3, 21 + eyeHeight, _paint);
+            canvas.DrawLine(eyeX + thinking - 3, 21 - eyeHeight, eyeX + thinking + 3, 21 + eyeHeight, _paint);
+            canvas.DrawLine(eyeX + thinking + 3, 21 - eyeHeight, eyeX + thinking - 3, 21 + eyeHeight, _paint);
         }
-        if (agent?.Working == true) canvas.Restore();
         _paint.Style = SKPaintStyle.Fill;
         if (prompt != null)
             Text(canvas, "Attention", left + 52, 26, 12, SKColors.White);
@@ -89,7 +85,7 @@ internal sealed class IslandRenderer : IDisposable
         else if (slide == 1 && agent != null)
         {
             int working = agents.Count(a => a.Working);
-            string label = Truncate(working > 1 ? $"{working} agents working" : agent.Agent + (agent.Working ? " working" : " finished"), width - 125, 11);
+            string label = Truncate(working > 1 ? $"{working} agents working" : agent.Agent + (agent.Working ? " working" : agent.Interrupted ? " interrupted" : " finished"), width - 125, 11);
             CenterText(canvas, label, left + width / 2, 26, 11, new SKColor(130, 230, 190));
         }
         else if (slide == 6 && focus.Active)
@@ -271,7 +267,7 @@ internal sealed class IslandRenderer : IDisposable
                     for (int i = 0; i < Math.Min(3, agents.Count); i++)
                     {
                         var item = agents[i];
-                        string name = item.Agent + (item.Working ? " · working" : " · finished");
+                        string name = item.Agent + (item.Working ? " · working" : item.Interrupted ? " · interrupted" : " · finished");
                         _paint.Color = item.Working ? new SKColor(130, 230, 190) : new SKColor(130, 140, 145);
                         canvas.DrawCircle(left + 30, 128 + 23 * i, 3, _paint);
                         Text(canvas, Truncate(name, 126, 12), left + 43, 132 + 23 * i, 12, new SKColor(130, 230, 190));

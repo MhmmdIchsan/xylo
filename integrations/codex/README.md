@@ -17,6 +17,7 @@ To enable this for a Codex configuration layer, merge the following entry into t
     }],
     "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python \"E:/path/to/xylo/integrations/codex/xylo_hook.py\"", "timeout": 3}]}],
     "Stop": [{"hooks": [{"type": "command", "command": "python \"E:/path/to/xylo/integrations/codex/xylo_hook.py\"", "timeout": 3}]}],
+    "Interrupt": [{"hooks": [{"type": "command", "command": "python \"E:/path/to/xylo/integrations/codex/xylo_hook.py\"", "timeout": 3}]}],
     "SessionEnd": [{"hooks": [{"type": "command", "command": "python \"E:/path/to/xylo/integrations/codex/xylo_hook.py\"", "timeout": 3}]}]
   }
 }
@@ -24,4 +25,4 @@ To enable this for a Codex configuration layer, merge the following entry into t
 
 Codex requires new non-managed hooks to be reviewed and trusted in `/hooks` or the app's hook settings. Hook availability and approval coverage depend on the installed Codex version and policy. See the [official Codex hooks documentation](https://learn.chatgpt.com/docs/hooks).
 
-UserPromptSubmit and Stop provide an approximate working/finished indicator; SessionEnd removes the session. These are hook events, not a guarantee that a process is still alive. [Claude Code](../claude/README.md), [Cursor](../cursor/README.md), [OpenCode](../opencode/README.md), and [Antigravity](../antigravity/README.md) have separate integrations.
+UserPromptSubmit, Stop and Interrupt provide an approximate working/finished/interrupted indicator; SessionEnd removes the session. These are hook events, not a guarantee that a process is still alive. Interrupt requires a supported local Codex session and a trusted hook. [Claude Code](../claude/README.md), [Cursor](../cursor/README.md), [OpenCode](../opencode/README.md), and [Antigravity](../antigravity/README.md) have separate integrations.

@@ -17,7 +17,7 @@ internal static class SelfTest
                 Enumerable.Range(0, 7).ToArray(), new[] { agent });
             canvas.Flush();
         }
-        Render(first, 0); Render(second, 0.25);
+        Render(first, 0); Render(second, 0.7);
         for (int y = 8; y <= 34; y++)
             for (int x = 160; x <= 195; x++)
                 if (first.GetPixel(x, y) != second.GetPixel(x, y)) return true;
@@ -127,6 +127,9 @@ internal static class SelfTest
             && NotificationService.SourceLabel(NotificationService.CreatePreview("Chrome", "Group A", "Hello")) == "Chrome / Group A"
             && NotificationService.CreatePreview("Chrome", "News", "WhatsApp mentioned").Kind == "notification"
             && NotificationService.CreatePreview("Chrome", "web.whatsapp.com", "Hello").Kind == "whatsapp"
+            && AgentBridge.ActivityForEvent("Codex", "s", "p", "UserPromptSubmit").Working
+            && AgentBridge.ActivityForEvent("Codex", "s", "p", "Interrupt") is { Working: false, Interrupted: true }
+            && AgentBridge.ActivityForEvent("Codex", "s", "p", "Stop") is { Working: false, Interrupted: false }
             && BrightnessHudService.Preview(55).Progress == 0.55f;
         return valid ? 0 : 1;
     }

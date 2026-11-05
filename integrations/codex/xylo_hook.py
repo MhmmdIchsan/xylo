@@ -21,7 +21,7 @@ def exchange(message):
 def main(agent="Codex"):
     event = json.load(sys.stdin)
     kind = event.get("hook_event_name")
-    if kind not in ("PermissionRequest", "UserPromptSubmit", "Stop", "SessionEnd"):
+    if kind not in ("PermissionRequest", "UserPromptSubmit", "Stop", "Interrupt", "SessionEnd"):
         return
     tool = event.get("tool_name", "") if kind == "PermissionRequest" else ""
     details = json.dumps(event.get("tool_input"), ensure_ascii=False, indent=2) if tool else ""
