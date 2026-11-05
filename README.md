@@ -16,6 +16,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Optional clipboard history in the notch controls: enable explicitly, then select a recent text item to copy it. History holds up to 20 entries in memory and is cleared on exit or when disabled. Clipboard entries may contain sensitive information.
 - Optional Windows notification previews can be enabled from the notch controls after granting Windows access. Availability depends on Windows permission and package identity; previews mirror content supplied by the originating app and may contain sensitive information.
 - Focus, short break and long break timers, with pause/resume controls inside the notch.
+- Optional weather in the notch. Enabling it sends your IP to ipwho.is to estimate location and sends approximate coordinates to Open-Meteo; no requests are made until enabled.
 - Local task list with an editor inside the notch, completion, deletion, and optional due date and time.
 - Optional [Codex](integrations/codex/README.md) and [Claude Code](integrations/claude/README.md) approval integrations, with an explicit in-notch review and safe fallback to the original agent prompt.
 - Optional [Cursor activity and shell review](integrations/cursor/README.md); shell review is a separately enabled policy that reviews each matching command.

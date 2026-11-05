@@ -39,6 +39,7 @@ internal sealed partial class IslandApp : IDisposable
     private LyricsService? _lyrics;
     private AgentBridge? _agents;
     private NotificationService? _notifications;
+    private WeatherService? _weather;
     private readonly Queue<NotificationPreview> _notificationQueue = new();
     private NotificationPreview? _preview;
     private bool _notificationPrompt;
@@ -87,6 +88,7 @@ internal sealed partial class IslandApp : IDisposable
             _lyrics = new LyricsService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _media = new MediaService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _media.Start();
+            if (_settings.WeatherEnabled) StartWeather();
         }
         RefreshBattery();
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BatteryTimer, 60000, IntPtr.Zero);
@@ -445,7 +447,7 @@ internal sealed partial class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done), _composer, _review, _prompt, BuildPanelView());
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done), _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -521,9 +523,9 @@ internal sealed partial class IslandApp : IDisposable
         _dirty = true;
     }
 
-    private void ShowPrompt(string title, string message, string actionLabel = "OK", Action? confirm = null)
+    private void ShowPrompt(string title, string message, string actionLabel = "OK", Action? confirm = null, bool dangerous = false)
     {
-        _prompt = new InlinePrompt(title, _renderer.WrapReview(ApprovalReview.SafeDisplay(message)), actionLabel, confirm);
+        _prompt = new InlinePrompt(title, _renderer.WrapReview(ApprovalReview.SafeDisplay(message)), actionLabel, confirm, dangerous);
         _expanded = true;
         UpdateTarget();
         _dirty = true;
@@ -576,7 +578,7 @@ internal sealed partial class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = _settings.Detached && _testPanelPagination && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
+            TaskTestSucceeded = _settings.Detached && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
         }
         else SaveTasks();
         CloseComposer();
@@ -667,6 +669,7 @@ internal sealed partial class IslandApp : IDisposable
         _lyrics?.Dispose();
         _agents?.Dispose();
         _notifications?.Dispose();
+        _weather?.Dispose();
         if (_clipboardListening) RemoveClipboardFormatListener(_hwnd);
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);

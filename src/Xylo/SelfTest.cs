@@ -2,6 +2,17 @@ namespace Xylo;
 
 internal static class SelfTest
 {
+    public static int RunWeather()
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+            var result = WeatherService.FetchAsync(timeout.Token).GetAwaiter().GetResult();
+            return result.Temperature is >= -100 and <= 80 ? 0 : 1;
+        }
+        catch { return 1; }
+    }
+
     public static int Run()
     {
         var lines = LyricsService.Parse("[00:02.50][00:04.00]first\n[00:07,25]second\n[ar:artist]");

@@ -9,6 +9,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         if (args.Contains("--self-test")) return SelfTest.Run();
+        if (args.Contains("--test-weather")) return SelfTest.RunWeather();
         using var instance = new Mutex(true, @"Local\Xylo.Desktop", out bool created);
         if (!created) return 0;
         try

@@ -25,6 +25,11 @@ try:
         u.SendMessageW(hwnd, 0x0202, 0, int(x * scale) | (int(y * scale) << 16))
         time.sleep(0.3)
     click(230, 345) # Controls -> next page
+    click(70, 95)   # Ask to enable weather
+    time.sleep(0.8)
+    click(350, 260) # Confirm inside Xylo
+    time.sleep(0.8)
+    click(70, 95)   # Disable again, using transient test settings
     click(160, 345) # Return to first page
     click(70, 95)   # Toggle position without changing the user's settings
     click(70, 247)  # Controls -> Tasks

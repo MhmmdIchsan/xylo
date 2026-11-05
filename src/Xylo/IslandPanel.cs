@@ -11,6 +11,7 @@ internal sealed partial class IslandApp
     private PanelRow[] _visiblePanelRows = Array.Empty<PanelRow>();
     private PanelView? _panelView;
     private bool _testPanelPagination;
+    private bool _testWeatherToggled;
 
     private void ShowMenu()
     {
@@ -65,6 +66,7 @@ internal sealed partial class IslandApp
                 rows.Add(new("Clipboard history  >", () => NavigatePanel(PanelPage.Clipboard)));
                 rows.Add(new($"Tasks ({_settings.Tasks.Count})  >", () => NavigatePanel(PanelPage.Tasks)));
                 rows.Add(new("Focus timer  >", () => NavigatePanel(PanelPage.Focus)));
+                rows.Add(new(_settings.WeatherEnabled ? "Weather: On" : "Weather: Off", ToggleWeather));
                 rows.Add(new("Quit Xylo", () => DestroyWindow(_hwnd)));
                 break;
             case PanelPage.Tasks:
@@ -97,7 +99,7 @@ internal sealed partial class IslandApp
                     {
                         if (_settings.Tasks.Remove(selected)) SaveTasks();
                         NavigatePanel(PanelPage.Tasks);
-                    })));
+                    }, dangerous: true)));
                 }
                 break;
             case PanelPage.Clipboard:
@@ -196,5 +198,41 @@ internal sealed partial class IslandApp
             _dirty = true;
         }
         else { _notificationPrompt = true; _notifications.Start(true); }
+    }
+
+    private void ToggleWeather()
+    {
+        if (_settings.WeatherEnabled)
+        {
+            _settings.WeatherEnabled = false;
+            _weather?.Dispose();
+            _weather = null;
+            try { _settings.Save(); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            { ShowPrompt("Weather", "Weather stopped, but the setting could not be saved and may return after restart."); }
+            InvalidatePanel();
+            return;
+        }
+        ShowPrompt("Enable weather?", "Uses your IP address at ipwho.is to estimate location. Approximate coordinates are sent to Open-Meteo.", "Enable", () =>
+        {
+            _settings.WeatherEnabled = true;
+            try { _settings.Save(); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                _settings.WeatherEnabled = false;
+                ShowPrompt("Weather", "Could not save the weather setting.");
+                return;
+            }
+            StartWeather();
+            InvalidatePanel();
+        });
+    }
+
+    private void StartWeather()
+    {
+        if (_taskTest) _testWeatherToggled = true;
+        _weather?.Dispose();
+        _weather = new WeatherService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
+        _weather.Start();
     }
 }

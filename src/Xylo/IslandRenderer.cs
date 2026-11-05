@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -76,6 +76,8 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, Truncate(media.Title, Math.Max(0, width - 155), 12), left + 52, 26, 12, new SKColor(235, 240, 242));
         else if (agent != null && !focus.Active)
             Text(canvas, Truncate(agent.Agent + (agent.Working ? " working" : " finished"), width - 125, 11), left + 52, 26, 11, new SKColor(130, 230, 190));
+        else if (weatherEnabled && !focus.Active)
+            Text(canvas, Truncate(weather?.Summary ?? "Weather…", width - 125, 11), left + 52, 26, 11, new SKColor(130, 230, 190));
         if (battery.Percent is int percent)
         {
             float centerX = right - 23;
@@ -96,7 +98,7 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, $"{percent}%", centerX - 39, 26, 11, new SKColor(200, 209, 213));
             if (battery.Charging) Text(canvas, "+", centerX - 3.5f, 25, 11, SKColors.White);
         }
-        else if (media == null && !focus.Active && agent == null && panel == null && composer == null && review == null && prompt == null && approval == null && notice == null && preview == null) Text(canvas, "Ready", right - 58, 29, 12, new SKColor(160, 169, 179));
+        else if (media == null && !focus.Active && agent == null && !weatherEnabled && panel == null && composer == null && review == null && prompt == null && approval == null && notice == null && preview == null) Text(canvas, "Ready", right - 58, 29, 12, new SKColor(160, 169, 179));
 
         if (media == null && focus.Active && panel == null && composer == null && review == null && prompt == null && approval == null && notice == null && preview == null)
             Text(canvas, Truncate(focus.Display, width - 120, 12), left + 52, 26, 12, new SKColor(130, 230, 190));
@@ -132,7 +134,7 @@ internal sealed class IslandRenderer : IDisposable
                 for (int i = 0; i < Math.Min(8, prompt.Lines.Length); i++)
                     Text(canvas, prompt.Lines[i], left + 24, 102 + 17 * i, 12, new SKColor(200, 210, 210));
                 if (prompt.Confirm != null) DrawButton(canvas, left + 202, 240, 76, 42, "Cancel", false);
-                DrawButton(canvas, left + 286, 240, 90, 42, prompt.ActionLabel, true, danger: prompt.Confirm != null);
+                DrawButton(canvas, left + 286, 240, 90, 42, prompt.ActionLabel, true, danger: prompt.Dangerous);
             }
             else if (review != null)
             {
@@ -198,7 +200,8 @@ internal sealed class IslandRenderer : IDisposable
             else if (media == null)
             {
             Text(canvas, "Your workspace, at a glance.", left + 24, 72, 17, SKColors.White);
-            Text(canvas, "Your controls are ready.", left + 24, 97, 13, new SKColor(160, 169, 179));
+            string weatherText = weather != null ? $"{weather.City}: {weather.Summary}" : weatherEnabled ? "Weather loading or unavailable" : "Your controls are ready.";
+            Text(canvas, Truncate(weatherText, width - 48, 13), left + 24, 97, 13, new SKColor(160, 169, 179));
             _paint.Color = new SKColor(255, 255, 255, 18);
             canvas.DrawLine(left + 24, 114, left + width - 24, 114, _paint);
             Text(canvas, "Focus timer", left + 24, 140, 13, SKColors.White);
