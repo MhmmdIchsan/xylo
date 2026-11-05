@@ -30,6 +30,8 @@ internal sealed partial class IslandApp : IDisposable
     private bool _animating, _trackingMouse, _menuOpen;
     private int _slide;
     private int _testSlides;
+    private bool _testClipboardToggled;
+    private int _testFocusActions;
     private float _scale = 1;
     private int _pixelWidth, _pixelHeight, _x, _y, _smokeTicks;
     private double _lastFrame;
@@ -65,7 +67,7 @@ internal sealed partial class IslandApp : IDisposable
         _smokeTest = smokeTest;
         _taskTest = taskTest;
         _settings = smokeTest || taskTest ? new Settings { Transient = true, ConnectivityAlertsEnabled = false, VolumeHudEnabled = false } : Settings.Load();
-        _slide = Math.Clamp(_settings.DashboardSlide, 0, 4);
+        _slide = Math.Clamp(_settings.DashboardSlide, 0, 6);
         _windowProcedure = WindowProcedure;
     }
 
@@ -285,7 +287,7 @@ internal sealed partial class IslandApp : IDisposable
                     float localX = mx - left;
                     if (my is >= 48 and <= 78 && localX is >= 24 and < 376)
                     {
-                        _slide = Math.Clamp((int)((localX - 24) / 70.4f), 0, 4);
+                        _slide = Math.Clamp((int)((localX - 24) / (352f / 7)), 0, 6);
                         _settings.DashboardSlide = _slide;
                         try { _settings.Save(); }
                         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -301,6 +303,33 @@ internal sealed partial class IslandApp : IDisposable
                     { ShowMenu(); NavigatePanel(PanelPage.Tasks); return IntPtr.Zero; }
                     if (_slide == 4 && my is >= 180 and <= 220 && localX is >= 290 and <= 376)
                     { ToggleLyrics(); return IntPtr.Zero; }
+                    if (_slide == 5)
+                    {
+                        if (my is >= 175 and <= 220 && localX is >= 24 and <= 180) { ToggleClipboard(); if (_taskTest && _clipboardListening) _testClipboardToggled = true; _dirty = true; return IntPtr.Zero; }
+                        if (_clipboardListening && my is >= 175 and <= 220 && localX is >= 200 and <= 376) { _clipboard.Clear(); _dirty = true; return IntPtr.Zero; }
+                        if (_clipboardListening && localX is >= 24 and <= 376 && my is >= 108 and < 168)
+                        {
+                            int item = (int)((my - 108) / 20);
+                            if (item < _clipboard.Items.Count && !_clipboard.Copy(_hwnd, item)) ShowPrompt("Clipboard", "Could not copy the selected item.");
+                            return IntPtr.Zero;
+                        }
+                    }
+                    if (_slide == 6)
+                    {
+                        if (my is >= 125 and <= 165)
+                        {
+                            if (localX is >= 24 and <= 128) { StartFocus("Focus", 25 * 60); if (_taskTest && _focus.Running) _testFocusActions |= 1; }
+                            else if (localX is >= 142 and <= 246) StartFocus("Break", 5 * 60);
+                            else if (localX is >= 260 and <= 376) StartFocus("Long break", 15 * 60);
+                        }
+                        else if (my is >= 175 and <= 215)
+                        {
+                            if (localX is >= 24 and <= 180) { _focus.Toggle(); if (_focus.Running) SetTimer(_hwnd, (UIntPtr)FocusTickTimer, 1000, IntPtr.Zero); else KillTimer(_hwnd, (UIntPtr)FocusTickTimer); if (_taskTest && _focus.Active && !_focus.Running) _testFocusActions |= 2; }
+                            else if (localX is >= 200 and <= 376) { _focus.Clear(); KillTimer(_hwnd, (UIntPtr)FocusTickTimer); if (_taskTest && !_focus.Active) _testFocusActions |= 4; }
+                        }
+                        _dirty = true;
+                        return IntPtr.Zero;
+                    }
                     if (_slide == 4 && _media?.Snapshot != null && my is >= 180 and <= 225)
                     {
                         if (mx >= left + 120 && mx < left + 170) _media.Control("previous");
@@ -356,6 +385,7 @@ internal sealed partial class IslandApp : IDisposable
                 return IntPtr.Zero;
             case 0x031D: // WM_CLIPBOARDUPDATE
                 if (_clipboardListening) _clipboard.Capture(hwnd);
+                if (_slide == 5) _dirty = true;
                 if (_panel == PanelPage.Clipboard) InvalidatePanel();
                 return IntPtr.Zero;
             case 0x0312: // WM_HOTKEY
@@ -414,7 +444,7 @@ internal sealed partial class IslandApp : IDisposable
                 }
                 else if (wParam.ToInt64() == FocusTickTimer)
                 {
-                    if (_focus.Tick()) KillTimer(hwnd, (UIntPtr)FocusTickTimer);
+                    if (_focus.Tick()) { KillTimer(hwnd, (UIntPtr)FocusTickTimer); EnqueueNotification(new NotificationPreview("Focus", _focus.Label + " complete", "Your timer has finished.")); }
                     if (_panel == PanelPage.Focus) InvalidatePanel();
                     _dirty = true;
                 }
@@ -513,7 +543,7 @@ internal sealed partial class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _clipboardListening, _clipboard.Items);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -648,7 +678,7 @@ internal sealed partial class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = _settings.Detached && _testSlides == 31 && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true } && task.Due == DateTime.Today.AddDays(1).AddHours(1).AddMinutes(15);
+            TaskTestSucceeded = _settings.Detached && _testSlides == 127 && _testClipboardToggled && !_clipboardListening && _testFocusActions == 7 && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true } && task.Due == DateTime.Today.AddDays(1).AddHours(1).AddMinutes(15);
         }
         else SaveTasks();
         CloseComposer();

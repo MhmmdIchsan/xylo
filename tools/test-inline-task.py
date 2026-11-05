@@ -24,8 +24,16 @@ try:
     def click(x, y):
         u.SendMessageW(hwnd, 0x0202, 0, int(x * scale) | (int(y * scale) << 16))
         time.sleep(0.3)
-    for x in (70, 140, 210, 280, 350):
+    for x in (69, 119, 169, 219, 269, 319, 369):
         click(x, 60)
+    click(319, 60)  # Clipboard
+    click(90, 195)  # Enable history
+    click(90, 195)  # Disable and clear history
+    click(369, 60)  # Focus
+    click(90, 145)  # Start a focus preset
+    click(90, 195)  # Pause
+    click(250, 195) # Clear timer
+    click(269, 60)  # Music
     click(350, 200) # Disable lyrics in Music
     click(350, 200) # Re-enable lyrics in Music
     click(330, 21)  # Open controls

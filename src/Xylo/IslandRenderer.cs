@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, bool clipboardEnabled, IReadOnlyList<string> clipboardItems)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -79,6 +79,8 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, Truncate(media.Title, Math.Max(0, width - 155), 12), left + 52, 26, 12, new SKColor(235, 240, 242));
         else if (slide == 1 && agent != null)
             Text(canvas, Truncate(agent.Agent + (agent.Working ? " working" : " finished"), width - 125, 11), left + 52, 26, 11, new SKColor(130, 230, 190));
+        else if (slide == 6 && focus.Active)
+            Text(canvas, Truncate(focus.Display, width - 125, 12), left + 52, 26, 12, new SKColor(130, 230, 190));
         else
             Text(canvas, DateTime.Now.ToString("HH:mm"), left + 52, 26, 13, SKColors.White);
         if (battery.Percent is int percent)
@@ -102,7 +104,7 @@ internal sealed class IslandRenderer : IDisposable
             if (battery.Charging) Text(canvas, "+", centerX - 3.5f, 25, 11, SKColors.White);
         }
         if (unreadCount > 0 && height < 100 && preview == null && approval == null && notice == null)
-            NotificationIcon(canvas, right - (battery.Percent.HasValue ? 76 : 24), 21, "notification");
+            DrawBell(canvas, right - (battery.Percent.HasValue ? 82 : 24), 21);
 
         if (height > 200 && panel == null && composer == null && review == null && prompt == null && approval == null)
         {
@@ -215,14 +217,14 @@ internal sealed class IslandRenderer : IDisposable
             }
             else
             {
-                string[] tabs = { "Today", "Agent", "Weather", "To-do", "Music" };
+                string[] tabs = { "Today", "Agent", "Weather", "To-do", "Music", "Clip", "Focus" };
                 for (int i = 0; i < tabs.Length; i++)
                 {
-                    float tabX = left + 24 + i * 70.4f;
+                    float tabX = left + 24 + i * (352f / 7);
                     _paint.Color = i == slide ? new SKColor(130, 230, 190, 45) : new SKColor(255, 255, 255, 12);
-                    canvas.DrawRoundRect(new SKRect(tabX, 48, tabX + 66, 78), 8, 8, _paint);
-                    DrawTabIcon(canvas, tabX + 11, 63, i, i == slide);
-                    CenterText(canvas, tabs[i], tabX + 43, 67, 10, i == slide ? new SKColor(130, 230, 190) : new SKColor(190, 200, 200));
+                    canvas.DrawRoundRect(new SKRect(tabX, 45, tabX + 47, 81), 8, 8, _paint);
+                    DrawTabIcon(canvas, tabX + 23, 55, i, i == slide);
+                    CenterText(canvas, tabs[i], tabX + 23, 76, 9, i == slide ? new SKColor(130, 230, 190) : new SKColor(190, 200, 200));
                 }
                 if (slide == 0)
                 {
@@ -279,7 +281,7 @@ internal sealed class IslandRenderer : IDisposable
                     }
                     DrawButton(canvas, left + 24, 175, 156, 40, "Manage tasks", false);
                 }
-                else
+                else if (slide == 4)
                 {
                     if (media == null) CenterText(canvas, "No media playing", left + width / 2, 140, 14, new SKColor(160, 169, 179));
                     else
@@ -294,6 +296,25 @@ internal sealed class IslandRenderer : IDisposable
                         DrawTransport(canvas, left + 245, 201, 1, false, true);
                     }
                     DrawButton(canvas, left + 290, 180, 86, 40, lyricsEnabled ? "Lyrics on" : "Lyrics off", false);
+                }
+                else if (slide == 5)
+                {
+                    Text(canvas, "Clipboard", left + 24, 104, 15, SKColors.White);
+                    if (!clipboardEnabled) Text(canvas, "History is off. Enable to keep copied text in memory.", left + 24, 139, 11, new SKColor(160, 169, 179));
+                    else if (clipboardItems.Count == 0) Text(canvas, "No copied text yet", left + 24, 139, 12, new SKColor(160, 169, 179));
+                    else for (int i = 0; i < Math.Min(3, clipboardItems.Count); i++)
+                        Text(canvas, Truncate(clipboardItems[i].Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' '), 340, 12), left + 30, 122 + i * 20, 12, new SKColor(220, 230, 230));
+                    DrawButton(canvas, left + 24, 175, 156, 40, clipboardEnabled ? "Turn off" : "Enable history", false);
+                    if (clipboardEnabled) DrawButton(canvas, left + 200, 175, 176, 40, "Clear history", false);
+                }
+                else
+                {
+                    Text(canvas, focus.Active ? $"{focus.Label}  {focus.Display}" : "Focus timer", left + 24, 104, 15, SKColors.White);
+                    DrawButton(canvas, left + 24, 125, 104, 40, "Focus 25m", false);
+                    DrawButton(canvas, left + 142, 125, 104, 40, "Break 5m", false);
+                    DrawButton(canvas, left + 260, 125, 116, 40, "Break 15m", false);
+                    DrawButton(canvas, left + 24, 175, 156, 40, focus.Running ? "Pause" : "Resume", false, focus.Active && !focus.Finished);
+                    DrawButton(canvas, left + 200, 175, 176, 40, "Clear timer", false, focus.Active);
                 }
             }
             canvas.Restore();
@@ -416,7 +437,9 @@ internal sealed class IslandRenderer : IDisposable
         else if (icon == 1) { canvas.DrawRoundRect(new SKRect(x - 5, y - 4, x + 5, y + 4), 2, 2, _paint); canvas.DrawLine(x, y - 4, x, y - 7, _paint); canvas.DrawPoint(x - 2, y, _paint); canvas.DrawPoint(x + 2, y, _paint); }
         else if (icon == 2) { canvas.DrawCircle(x, y, 3, _paint); canvas.DrawLine(x - 6, y, x - 5, y, _paint); canvas.DrawLine(x + 5, y, x + 6, y, _paint); canvas.DrawLine(x, y - 6, x, y - 5, _paint); canvas.DrawLine(x, y + 5, x, y + 6, _paint); }
         else if (icon == 3) { canvas.DrawRoundRect(new SKRect(x - 5, y - 5, x + 5, y + 5), 2, 2, _paint); canvas.DrawLine(x - 3, y, x - 1, y + 2, _paint); canvas.DrawLine(x - 1, y + 2, x + 3, y - 2, _paint); }
-        else { canvas.DrawLine(x + 2, y - 5, x + 2, y + 3, _paint); canvas.DrawLine(x + 2, y - 5, x + 5, y - 6, _paint); canvas.DrawOval(new SKRect(x - 3, y + 1, x + 2, y + 4), _paint); }
+        else if (icon == 4) { canvas.DrawLine(x + 2, y - 5, x + 2, y + 3, _paint); canvas.DrawLine(x + 2, y - 5, x + 5, y - 6, _paint); canvas.DrawOval(new SKRect(x - 3, y + 1, x + 2, y + 4), _paint); }
+        else if (icon == 5) { canvas.DrawRoundRect(new SKRect(x - 4, y - 5, x + 4, y + 5), 1, 1, _paint); canvas.DrawLine(x - 2, y - 6, x + 2, y - 6, _paint); canvas.DrawLine(x - 2, y - 1, x + 2, y - 1, _paint); canvas.DrawLine(x - 2, y + 2, x + 2, y + 2, _paint); }
+        else { canvas.DrawCircle(x, y + 1, 5, _paint); canvas.DrawLine(x, y + 1, x + 2, y - 2, _paint); canvas.DrawLine(x - 2, y - 6, x + 2, y - 6, _paint); }
         _paint.Style = SKPaintStyle.Fill;
     }
 
@@ -444,6 +467,15 @@ internal sealed class IslandRenderer : IDisposable
         }
         else if (kind == "whatsapp") CenterText(canvas, "W", x, y + 4, 11, SKColors.White);
         else { _paint.Color = SKColors.White; canvas.DrawCircle(x, y, 2, _paint); }
+    }
+
+    private void DrawBell(SKCanvas canvas, float x, float y)
+    {
+        _paint.Color = new SKColor(160, 190, 185); _paint.Style = SKPaintStyle.Stroke; _paint.StrokeWidth = 1.4f;
+        canvas.DrawArc(new SKRect(x - 5, y - 6, x + 5, y + 5), 180, 180, false, _paint);
+        canvas.DrawLine(x - 5, y, x - 5, y + 4, _paint); canvas.DrawLine(x + 5, y, x + 5, y + 4, _paint);
+        canvas.DrawLine(x - 6, y + 4, x + 6, y + 4, _paint);
+        _paint.Style = SKPaintStyle.Fill; canvas.DrawCircle(x, y + 6, 1, _paint);
     }
 
     public void Dispose()
