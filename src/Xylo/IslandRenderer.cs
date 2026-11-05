@@ -667,7 +667,7 @@ internal sealed class IslandRenderer : IDisposable
         var elements = System.Globalization.StringInfo.ParseCombiningCharacters(value);
         for (int i = elements.Length - 1; i >= 0; i--)
         {
-            string candidate = value[..elements[i]] + "?";
+            string candidate = value[..elements[i]] + "\u2026";
             if (LayoutText(null, candidate, 0, 0, size) <= maxWidth) return candidate;
         }
         return "";

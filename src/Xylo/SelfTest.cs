@@ -107,7 +107,7 @@ internal static class SelfTest
         canvas.Flush();
         var pixel = bitmap.GetPixel(89, 139);
         // The system fallback must cover mixed Korean/Latin lyrics, not .notdef boxes.
-        return pixel.Red > 180 && pixel.Green < 60 && renderer.HasGlyphs("K-pop ?? ?? 123");
+        return pixel.Red > 180 && pixel.Green < 60 && renderer.HasGlyphs("K-pop \uC0AC\uB791 \uB178\uB798 123");
     }
 
     public static int RunBrightness()
