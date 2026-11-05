@@ -9,9 +9,13 @@ import time
 user32 = ctypes.windll.user32
 user32.FindWindowW.restype = ctypes.c_void_p
 root = pathlib.Path(__file__).resolve().parents[1]
-hook = root / "integrations" / (sys.argv[1] if len(sys.argv) > 1 else "codex") / "xylo_hook.py"
-event = {"hook_event_name": "PermissionRequest", "session_id": "xylo-integration-test",
-         "cwd": "synthetic-test", "tool_name": "Bash", "tool_input": {"command": "echo xylo-test"}}
+agent = sys.argv[1] if len(sys.argv) > 1 else "codex"
+hook = root / "integrations" / agent / "xylo_hook.py"
+event = ({"hook_event_name": "beforeShellExecution", "conversation_id": "xylo-integration-test",
+          "cwd": "synthetic-test", "command": "echo xylo-test", "sandbox": True}
+         if agent == "cursor" else
+         {"hook_event_name": "PermissionRequest", "session_id": "xylo-integration-test",
+          "cwd": "synthetic-test", "tool_name": "Bash", "tool_input": {"command": "echo xylo-test"}})
 window = None
 for _ in range(30):
     window = user32.FindWindowW("Xylo.Desktop.Window", None)
@@ -40,7 +44,10 @@ for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
     user32.PostMessageW(ctypes.c_void_p(dialog), 0x111, choice, 0)
     process.wait(timeout=5)
     output = process.stdout.read()
-    if expected is None:
+    if agent == "cursor":
+        actual = json.loads(output)["permission"]
+        assert actual == (expected or "ask"), (actual, expected)
+    elif expected is None:
         assert not output, output
     else:
         actual = json.loads(output)["hookSpecificOutput"]["decision"]["behavior"]

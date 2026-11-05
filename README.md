@@ -17,6 +17,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Optional Windows notification previews can be enabled from the right-click menu after granting Windows access. Availability depends on Windows permission and package identity; previews mirror content supplied by the originating app and may contain sensitive information.
 - Focus, short break and long break timers, with pause/resume controls in the right-click menu.
 - Optional [Codex](integrations/codex/README.md) and [Claude Code](integrations/claude/README.md) approval integrations, with an explicit review dialog and safe fallback to the original agent prompt.
+- Optional [Cursor activity and shell review](integrations/cursor/README.md); shell review is a separately enabled policy that reviews each matching command.
 - System tray menu to expand/collapse or quit.
 - Configuration in the right-click menu switches between an attached notch and a floating island; the choice is saved locally.
 - `Ctrl+Alt+X` global toggle shortcut, when available.
