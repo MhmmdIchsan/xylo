@@ -1,0 +1,34 @@
+# .NET build output and generated artifacts
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+[Tt]est[Rr]esults/
+[Dd]ist/
+*.nupkg
+*.snupkg
+*.log
+
+# Local IDE and user settings
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local environment, credentials, and signing keys
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.pem
+
+# OS and temporary files
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp
+*.bak
