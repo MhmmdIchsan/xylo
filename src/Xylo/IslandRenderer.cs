@@ -81,9 +81,9 @@ internal sealed class IslandRenderer : IDisposable
         else if (slide == 4 && media != null)
             Text(canvas, Truncate(media.Title, Math.Max(0, width - 155), 12), left + 52, 26, 12, new SKColor(235, 240, 242));
         else if (slide == 1 && agent != null)
-            Text(canvas, Truncate(agent.Agent + (agent.Working ? " working" : " finished"), width - 125, 11), left + 52, 26, 11, new SKColor(130, 230, 190));
+            CenterText(canvas, Truncate(agent.Agent + (agent.Working ? " working" : " finished"), width - 125, 11), left + width / 2, 26, 11, new SKColor(130, 230, 190));
         else if (slide == 6 && focus.Active)
-            Text(canvas, Truncate(focus.Display, width - 125, 12), left + 52, 26, 12, new SKColor(130, 230, 190));
+            CenterText(canvas, Truncate(focus.Display, width - 125, 12), left + width / 2, 26, 12, new SKColor(130, 230, 190));
         else
             CenterText(canvas, DateTime.Now.ToString("HH:mm"), left + width / 2, 26, 13, SKColors.White);
         if (battery.Percent is int percent)
@@ -257,10 +257,10 @@ internal sealed class IslandRenderer : IDisposable
                 }
                 else if (slide == 1)
                 {
-                    Text(canvas, "AI Agent", left + 24, 105, 16, SKColors.White);
-                    Text(canvas, agent == null ? "No recent agent activity" : Truncate(agent.Agent + (agent.Working ? " · working" : " · finished"), 352, 13), left + 24, 132, 13, new SKColor(130, 230, 190));
-                    if (agent != null) Text(canvas, Truncate(agent.Project, 352, 12), left + 24, 155, 12, new SKColor(160, 169, 179));
-                    Text(canvas, "Approval requests appear here automatically", left + 24, 204, 11, new SKColor(160, 169, 179));
+                    CenterText(canvas, "AI Agent", left + width / 2, 105, 16, SKColors.White);
+                    CenterText(canvas, agent == null ? "No recent agent activity" : Truncate(agent.Agent + (agent.Working ? " · working" : " · finished"), 352, 13), left + width / 2, 132, 13, new SKColor(130, 230, 190));
+                    if (agent != null) CenterText(canvas, Truncate(agent.Project, 352, 12), left + width / 2, 155, 12, new SKColor(160, 169, 179));
+                    CenterText(canvas, "Approval requests appear here automatically", left + width / 2, 204, 11, new SKColor(160, 169, 179));
                 }
                 else if (slide == 2)
                 {
@@ -341,7 +341,7 @@ internal sealed class IslandRenderer : IDisposable
                 }
                 else
                 {
-                    Text(canvas, focus.Active ? $"{focus.Label}  {focus.Display}" : "Focus timer", left + 24, 104, 15, SKColors.White);
+                    CenterText(canvas, focus.Active ? $"{focus.Label}  {focus.Display}" : "Focus timer", left + width / 2, 104, 15, SKColors.White);
                     DrawButton(canvas, left + 24, 125, 104, 40, "Focus 25m", false);
                     DrawButton(canvas, left + 142, 125, 104, 40, "Break 5m", false);
                     DrawButton(canvas, left + 260, 125, 116, 40, "Break 15m", false);
