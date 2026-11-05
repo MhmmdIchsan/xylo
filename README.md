@@ -13,6 +13,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Optional battery alerts for low or critical charge and power connection changes.
 - Optional Wi-Fi and Bluetooth connection alerts. Device names and Wi-Fi SSIDs depend on Windows permissions and device support.
 - Optional volume HUD using Windows Core Audio events.
+- Optional brightness HUD using Windows display events; availability depends on the display and driver.
 - Minimal animated eyes blink periodically without a continuously running animation loop.
 - Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.
 - Shows the current synchronized lyric line in the compact notch and upcoming lines when expanded. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.

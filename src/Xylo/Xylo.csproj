@@ -13,6 +13,7 @@
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
     <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="3.119.4" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../third-party/WinIsland.LICENSE" Link="third-party/WinIsland.LICENSE" CopyToOutputDirectory="PreserveNewest" />

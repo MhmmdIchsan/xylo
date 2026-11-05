@@ -20,6 +20,7 @@ internal sealed class Settings
     public bool BatteryAlertsEnabled { get; set; } = true;
     public bool ConnectivityAlertsEnabled { get; set; }
     public bool VolumeHudEnabled { get; set; }
+    public bool BrightnessHudEnabled { get; set; }
     public List<TaskItem> Tasks { get; set; } = new();
     [JsonIgnore]
     internal bool Transient { get; set; }

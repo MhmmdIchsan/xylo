@@ -3,7 +3,7 @@ using Windows.UI.Notifications.Management;
 
 namespace Xylo;
 
-internal sealed record NotificationPreview(string App, string Title, string Body, float? Progress = null, bool IsHud = false);
+internal sealed record NotificationPreview(string App, string Title, string Body, float? Progress = null, bool IsHud = false, string HudSource = "");
 
 internal sealed class NotificationService : IDisposable
 {

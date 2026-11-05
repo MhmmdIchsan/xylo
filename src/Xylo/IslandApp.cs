@@ -43,6 +43,7 @@ internal sealed partial class IslandApp : IDisposable
     private WeatherService? _weather;
     private ConnectivityService? _connectivity;
     private VolumeHudService? _volumeHud;
+    private BrightnessHudService? _brightnessHud;
     private NotificationPreview? _pendingHud;
     private readonly Queue<NotificationPreview> _notificationQueue = new();
     private NotificationPreview? _preview;
@@ -95,6 +96,7 @@ internal sealed partial class IslandApp : IDisposable
             if (_settings.WeatherEnabled) StartWeather();
             if (_settings.ConnectivityAlertsEnabled) StartConnectivity();
             if (_settings.VolumeHudEnabled) StartVolumeHud();
+            if (_settings.BrightnessHudEnabled) StartBrightnessHud();
         }
         RefreshBattery();
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BatteryTimer, 60000, IntPtr.Zero);
@@ -283,7 +285,7 @@ internal sealed partial class IslandApp : IDisposable
                 return IntPtr.Zero;
             case HudMessage:
                 var hud = Interlocked.Exchange(ref _pendingHud, null);
-                if (hud != null && _settings.VolumeHudEnabled)
+                if (hud != null && (hud.HudSource == "volume" && _settings.VolumeHudEnabled || hud.HudSource == "brightness" && _settings.BrightnessHudEnabled))
                 {
                     if (_preview is { IsHud: false } previous)
                     {
@@ -606,7 +608,7 @@ internal sealed partial class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = _settings.Detached && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
+            TaskTestSucceeded = _settings.Detached && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
         }
         else SaveTasks();
         CloseComposer();
@@ -700,6 +702,7 @@ internal sealed partial class IslandApp : IDisposable
         _weather?.Dispose();
         _connectivity?.Dispose();
         _volumeHud?.Dispose();
+        _brightnessHud?.Dispose();
         if (_clipboardListening) RemoveClipboardFormatListener(_hwnd);
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);

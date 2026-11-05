@@ -2,6 +2,14 @@ namespace Xylo;
 
 internal static class SelfTest
 {
+    public static int RunBrightness()
+    {
+        using var service = new BrightnessHudService(_ => { });
+        service.Start();
+        for (int i = 0; i < 50 && !service.Initialized; i++) Thread.Sleep(100);
+        return service.Monitoring ? 0 : 1;
+    }
+
     public static int RunVolume()
     {
         using var service = new VolumeHudService(_ => { });
@@ -68,7 +76,8 @@ internal static class SelfTest
             && task is { Title: "new task", Done: true, HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 }
             && startsLocked && staysLocked && review.CanApprove && ApprovalReview.SafeDisplay("a\u202Eb\t") == "a\\u202Eb\\u0009"
             && lowBattery?.Title == "Battery low" && plugged?.Title == "Power connected" && unknownPower == null
-            && wifiConnected?.Title == "Wi-Fi connected" && wifiSame == null && muted.Title == "Muted" && muted.Progress == 0;
+            && wifiConnected?.Title == "Wi-Fi connected" && wifiSame == null && muted.Title == "Muted" && muted.Progress == 0
+            && BrightnessHudService.Preview(55).Progress == 0.55f;
         return valid ? 0 : 1;
     }
 }

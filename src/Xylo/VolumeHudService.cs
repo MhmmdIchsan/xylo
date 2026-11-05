@@ -68,7 +68,7 @@ internal sealed class VolumeHudService : IDisposable
     internal static NotificationPreview Preview(float volume, bool muted)
     {
         float value = muted ? 0 : Math.Clamp(volume, 0, 1);
-        return new NotificationPreview("System", muted ? "Muted" : "Volume", $"{Math.Round(value * 100):0}%", value, true);
+        return new NotificationPreview("System", muted ? "Muted" : "Volume", $"{Math.Round(value * 100):0}%", value, true, "volume");
     }
 
     private void Publish(float volume, bool muted)

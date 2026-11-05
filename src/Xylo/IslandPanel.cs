@@ -14,6 +14,7 @@ internal sealed partial class IslandApp
     private bool _testWeatherToggled;
     private bool _testConnectivityToggled;
     private bool _testVolumeToggled;
+    private bool _testBrightnessToggled;
 
     private void ShowMenu()
     {
@@ -79,6 +80,7 @@ internal sealed partial class IslandApp
                 }));
                 rows.Add(new(_settings.ConnectivityAlertsEnabled ? "Connectivity alerts: On" : "Connectivity alerts: Off", ToggleConnectivity));
                 rows.Add(new(_settings.VolumeHudEnabled ? "Volume HUD: On" : "Volume HUD: Off", ToggleVolumeHud));
+                rows.Add(new(_settings.BrightnessHudEnabled ? "Brightness HUD: On" : "Brightness HUD: Off", ToggleBrightnessHud));
                 rows.Add(new("Quit Xylo", () => DestroyWindow(_hwnd)));
                 break;
             case PanelPage.Tasks:
@@ -294,8 +296,7 @@ internal sealed partial class IslandApp
         {
             _volumeHud?.Dispose();
             _volumeHud = null;
-            Interlocked.Exchange(ref _pendingHud, null);
-            if (_preview?.IsHud == true) ShowNextNotification();
+            if (_preview?.HudSource == "volume") ShowNextNotification();
         }
         InvalidatePanel();
     }
@@ -303,11 +304,42 @@ internal sealed partial class IslandApp
     private void StartVolumeHud()
     {
         _volumeHud?.Dispose();
-        _volumeHud = new VolumeHudService(preview =>
-        {
-            Interlocked.Exchange(ref _pendingHud, preview);
-            PostMessage(_hwnd, HudMessage, IntPtr.Zero, IntPtr.Zero);
-        });
+        _volumeHud = new VolumeHudService(PublishHud);
         _volumeHud.Start();
+    }
+
+    private void ToggleBrightnessHud()
+    {
+        bool enabled = !_settings.BrightnessHudEnabled;
+        if (_taskTest && enabled) _testBrightnessToggled = true;
+        _settings.BrightnessHudEnabled = enabled;
+        try { _settings.Save(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _settings.BrightnessHudEnabled = !enabled;
+            ShowPrompt("Brightness HUD", "Could not save the HUD setting.");
+            return;
+        }
+        if (enabled) StartBrightnessHud();
+        else
+        {
+            _brightnessHud?.Dispose();
+            _brightnessHud = null;
+            if (_preview?.HudSource == "brightness") ShowNextNotification();
+        }
+        InvalidatePanel();
+    }
+
+    private void StartBrightnessHud()
+    {
+        _brightnessHud?.Dispose();
+        _brightnessHud = new BrightnessHudService(PublishHud);
+        _brightnessHud.Start();
+    }
+
+    private void PublishHud(NotificationPreview preview)
+    {
+        Interlocked.Exchange(ref _pendingHud, preview);
+        PostMessage(_hwnd, HudMessage, IntPtr.Zero, IntPtr.Zero);
     }
 }

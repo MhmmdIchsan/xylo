@@ -12,6 +12,7 @@ internal static class Program
         if (args.Contains("--test-weather")) return SelfTest.RunWeather();
         if (args.Contains("--test-connectivity")) return SelfTest.RunConnectivity();
         if (args.Contains("--test-volume")) return SelfTest.RunVolume();
+        if (args.Contains("--test-brightness")) return SelfTest.RunBrightness();
         using var instance = new Mutex(true, @"Local\Xylo.Desktop", out bool created);
         if (!created) return 0;
         try
