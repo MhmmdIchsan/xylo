@@ -10,6 +10,7 @@ The first desktop prototype is implemented. It currently provides the notch shel
 - Hover to expand; move away to collapse after a brief grace period.
 - Composition-paced spring animation, fading content, and transparent hit testing.
 - System tray menu to expand/collapse or quit.
+- Configuration in the right-click menu switches between an attached notch and a floating island; the choice is saved locally.
 - `Ctrl+Alt+X` global toggle shortcut, when available.
 - DPI-aware rendering and surface recreation after display changes.
 - Single-instance startup and message-driven idle behavior: no continuous rendering when settled.

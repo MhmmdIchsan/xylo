@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -20,8 +20,14 @@ internal sealed class IslandRenderer : IDisposable
         float left = (IslandApp.CanvasWidth - width) / 2;
         float right = left + width;
         _outline.Reset();
-        _outline.MoveTo(left, -1);
-        _outline.LineTo(right, -1);
+        _outline.MoveTo(left, detached ? 23 : -1);
+        if (detached)
+        {
+            _outline.QuadTo(left, 0, left + 23, 0);
+            _outline.LineTo(right - 23, 0);
+            _outline.QuadTo(right, 0, right, 23);
+        }
+        else _outline.LineTo(right, -1);
         _outline.LineTo(right, height - 23);
         _outline.QuadTo(right, height, right - 23, height);
         _outline.LineTo(left + 23, height);

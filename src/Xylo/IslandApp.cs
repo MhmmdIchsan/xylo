@@ -18,6 +18,7 @@ internal sealed class IslandApp : IDisposable
     private readonly Spring _height = new(initial: 42);
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly bool _smokeTest;
+    private readonly Settings _settings;
     private readonly uint _taskbarCreated = RegisterWindowMessage("TaskbarCreated");
     private IntPtr _hwnd, _memoryDc, _bitmap, _oldBitmap;
     private SKSurface? _surface;
@@ -34,6 +35,7 @@ internal sealed class IslandApp : IDisposable
     public IslandApp(bool smokeTest)
     {
         _smokeTest = smokeTest;
+        _settings = smokeTest ? new Settings() : Settings.Load();
         _windowProcedure = WindowProcedure;
     }
 
@@ -182,6 +184,11 @@ internal sealed class IslandApp : IDisposable
         float bottom = (float)_height.Value;
         if (x < left || x > right || y < 0 || y > bottom) return false;
         const float radius = 23;
+        if (_settings.Detached && y < radius)
+        {
+            float topX = Math.Clamp(x, left + radius, right - radius);
+            return Math.Pow(x - topX, 2) + Math.Pow(y - radius, 2) <= radius * radius;
+        }
         if (y <= bottom - radius) return true;
         float nearestX = Math.Clamp(x, left + radius, right - radius);
         float nearestY = bottom - radius;
@@ -196,7 +203,7 @@ internal sealed class IslandApp : IDisposable
         _pixelWidth = (int)Math.Ceiling(CanvasWidth * _scale);
         _pixelHeight = (int)Math.Ceiling(CanvasHeight * _scale);
         _x = (GetSystemMetrics(SM_CXSCREEN) - _pixelWidth) / 2;
-        _y = 0;
+        _y = _settings.Detached ? (int)(12 * _scale) : 0;
         IntPtr screenDc = GetDC(IntPtr.Zero);
         try
         {
@@ -219,7 +226,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -251,6 +258,7 @@ internal sealed class IslandApp : IDisposable
         try
         {
             AppendMenu(menu, MF_STRING, (UIntPtr)1, _expanded ? "Collapse Xylo" : "Expand Xylo");
+            AppendMenu(menu, MF_STRING, (UIntPtr)3, _settings.Detached ? "Configuration: Attach to top" : "Configuration: Float below top");
             AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, "");
             AppendMenu(menu, MF_STRING, (UIntPtr)2, "Quit Xylo");
             GetCursorPos(out var cursor);
@@ -259,6 +267,19 @@ internal sealed class IslandApp : IDisposable
                 cursor.X, cursor.Y, 0, _hwnd, IntPtr.Zero);
             if (command == 1) Toggle();
             else if (command == 2) DestroyWindow(_hwnd);
+            else if (command == 3)
+            {
+                bool previous = _settings.Detached;
+                _settings.Detached = !previous;
+                try { _settings.Save(); }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    _settings.Detached = previous;
+                    MessageBox(_hwnd, "Could not save Xylo configuration.", "Xylo", 0x10);
+                }
+                _y = _settings.Detached ? (int)(12 * _scale) : 0;
+                _dirty = true;
+            }
             PostMessage(_hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
         }
         finally
