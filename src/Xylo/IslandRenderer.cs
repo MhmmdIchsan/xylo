@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks, TaskComposer? composer)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -58,7 +58,9 @@ internal sealed class IslandRenderer : IDisposable
             canvas.DrawLine(eyeX + 3, 21 - eyeHeight, eyeX - 3, 21 + eyeHeight, _paint);
         }
         _paint.Style = SKPaintStyle.Fill;
-        if (approval != null)
+        if (composer != null)
+            Text(canvas, composer.EditIndex == null ? "New task" : "Edit task", left + 52, 26, 12, SKColors.White);
+        else if (approval != null)
             Text(canvas, approval.Agent + " needs approval", left + 52, 26, 12, new SKColor(255, 185, 100));
         else if (notice != null)
             Text(canvas, notice.Agent + " needs approval", left + 52, 26, 12, new SKColor(255, 185, 100));
@@ -112,7 +114,18 @@ internal sealed class IslandRenderer : IDisposable
             _contentOpacity.Color = SKColors.White.WithAlpha((byte)(255 * reveal));
             canvas.SaveLayer(_contentOpacity);
             canvas.Translate(0, 8 * (1 - reveal));
-            if (approval != null)
+            if (composer != null)
+            {
+                Text(canvas, "Task", left + 24, 70, 12, new SKColor(160, 169, 179));
+                ComposerField(canvas, left + 24, 75, 352, composer.Title, !composer.EditingDue, composer);
+                Text(canvas, "Due (optional): YYYY-MM-DD or YYYY-MM-DD HH:mm", left + 24, 126, 11, new SKColor(160, 169, 179));
+                ComposerField(canvas, left + 24, 132, 352, composer.Due, composer.EditingDue, composer);
+                Text(canvas, Truncate(composer.Error.Length > 0 ? composer.Error : composer.Focused ? "Tab switches fields · Enter saves · Esc cancels" : "Click a field to type", 352, 11), left + 24, 194, 11,
+                    composer.Error.Length > 0 ? new SKColor(255, 142, 142) : new SKColor(160, 169, 179));
+                DrawButton(canvas, left + 202, 240, 76, 42, "Cancel", false);
+                DrawButton(canvas, left + 286, 240, 90, 42, "Save", true);
+            }
+            else if (approval != null)
             {
                 Text(canvas, approval.Agent + " needs your approval", left + 24, 72, 16, SKColors.White);
                 Text(canvas, Truncate(approval.Tool, width - 48, 13), left + 24, 98, 13, new SKColor(255, 185, 100));
@@ -165,6 +178,44 @@ internal sealed class IslandRenderer : IDisposable
             canvas.Restore();
         }
         canvas.Restore();
+    }
+
+    private void ComposerField(SKCanvas canvas, float x, float y, float width, string value, bool selected, TaskComposer composer)
+    {
+        var rect = new SKRect(x, y, x + width, y + 34);
+        _paint.Style = SKPaintStyle.Fill;
+        _paint.Color = new SKColor(255, 255, 255, 14);
+        canvas.DrawRoundRect(rect, 8, 8, _paint);
+        _paint.Style = SKPaintStyle.Stroke;
+        _paint.StrokeWidth = 1;
+        _paint.Color = selected ? new SKColor(130, 230, 190, 210) : new SKColor(255, 255, 255, 35);
+        canvas.DrawRoundRect(rect, 8, 8, _paint);
+        _paint.Style = SKPaintStyle.Fill;
+        _font.Size = 14;
+        int caret = selected ? Math.Min(composer.Caret, value.Length) : value.Length;
+        int start = 0;
+        while (start < caret && _font.MeasureText(value[start..caret]) > width - 28) start++;
+        canvas.Save();
+        canvas.ClipRect(new SKRect(x + 8, y, x + width - 8, y + 34));
+        Text(canvas, value[start..], x + 10, y + 23, 14, SKColors.White);
+        if (selected && composer.Focused)
+        {
+            float caretX = x + 10 + _font.MeasureText(value[start..caret]);
+            _paint.Color = new SKColor(130, 230, 190);
+            _paint.StrokeWidth = 1.5f;
+            canvas.DrawLine(caretX, y + 8, caretX, y + 26, _paint);
+        }
+        canvas.Restore();
+    }
+
+    private void DrawButton(SKCanvas canvas, float x, float y, float width, float height, string label, bool primary)
+    {
+        _paint.Style = SKPaintStyle.Fill;
+        _paint.Color = primary ? new SKColor(130, 230, 190) : new SKColor(255, 255, 255, 22);
+        canvas.DrawRoundRect(new SKRect(x, y, x + width, y + height), 10, 10, _paint);
+        _font.Size = 13;
+        Text(canvas, label, x + (width - _font.MeasureText(label)) / 2, y + 26, 13,
+            primary ? new SKColor(13, 25, 22) : SKColors.White);
     }
 
     private void DrawTransport(SKCanvas canvas, float x, float y, int direction, bool pause, bool skip)

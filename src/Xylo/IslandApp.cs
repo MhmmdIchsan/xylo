@@ -10,7 +10,7 @@ namespace Xylo;
 internal sealed class IslandApp : IDisposable
 {
     public const float CanvasWidth = 440;
-    private const float CanvasHeight = 250;
+    private const float CanvasHeight = 320;
     private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9;
     private const uint PreviewMessage = 0x8004, NotificationStatusMessage = 0x8005;
     private readonly WndProc _windowProcedure;
@@ -19,6 +19,8 @@ internal sealed class IslandApp : IDisposable
     private readonly Spring _height = new(initial: 42);
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly bool _smokeTest;
+    private readonly bool _taskTest;
+    public bool TaskTestSucceeded { get; private set; }
     private readonly Settings _settings;
     private readonly uint _taskbarCreated = RegisterWindowMessage("TaskbarCreated");
     private IntPtr _hwnd, _memoryDc, _bitmap, _oldBitmap;
@@ -44,11 +46,15 @@ internal sealed class IslandApp : IDisposable
     private readonly FocusTimer _focus = new();
     private bool _clipboardListening;
     private double _blinkStarted = -1;
+    private TaskComposer? _composer;
+    private IntPtr _previousForeground;
+    private IntPtr _originalWindowStyle;
 
-    public IslandApp(bool smokeTest)
+    public IslandApp(bool smokeTest, bool taskTest = false)
     {
         _smokeTest = smokeTest;
-        _settings = smokeTest ? new Settings() : Settings.Load();
+        _taskTest = taskTest;
+        _settings = smokeTest || taskTest ? new Settings() : Settings.Load();
         _windowProcedure = WindowProcedure;
     }
 
@@ -68,8 +74,8 @@ internal sealed class IslandApp : IDisposable
             windowClass.lpszClassName, "Xylo", WS_POPUP, 0, 0, 1, 1,
             IntPtr.Zero, IntPtr.Zero, windowClass.hInstance, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new Win32Exception();
-        if (!_smokeTest && _settings.ClipboardEnabled) _clipboardListening = AddClipboardFormatListener(_hwnd);
-        if (!_smokeTest)
+        if (!_smokeTest && !_taskTest && _settings.ClipboardEnabled) _clipboardListening = AddClipboardFormatListener(_hwnd);
+        if (!_smokeTest && !_taskTest)
         {
             _notifications = new NotificationService(EnqueueNotification,
                 () => PostMessage(_hwnd, NotificationStatusMessage, IntPtr.Zero, IntPtr.Zero));
@@ -89,6 +95,7 @@ internal sealed class IslandApp : IDisposable
         AddTrayIcon();
         // Ctrl + Alt + X, with MOD_NOREPEAT. A collision does not prevent startup.
         _hotkeyRegistered = RegisterHotKey(_hwnd, 1, 0x4003, 0x58);
+        if (_taskTest) BeginComposer(null);
         if (_smokeTest && SetTimer(_hwnd, (UIntPtr)SmokeTimer, 500, IntPtr.Zero) == UIntPtr.Zero)
             throw new Win32Exception();
 
@@ -129,6 +136,7 @@ internal sealed class IslandApp : IDisposable
     private void SetExpanded(bool expanded)
     {
         KillTimer(_hwnd, (UIntPtr)CollapseTimer);
+        if (!expanded && _composer != null) return;
         if (_expanded == expanded) return;
         _expanded = expanded;
         UpdateTarget();
@@ -138,7 +146,7 @@ internal sealed class IslandApp : IDisposable
     {
         bool needsDetail = _media?.Snapshot != null || _agents?.Pending != null || _agents?.Notice != null || _preview != null;
         double targetWidth = _expanded ? 400 : (needsDetail ? 400 : _agents?.Activity != null ? 260 : 180);
-        double targetHeight = _expanded ? 236 : (needsDetail ? 68 : 42);
+        double targetHeight = _composer != null ? 300 : _expanded ? 236 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
         _width.Target = targetWidth;
         _height.Target = targetHeight;
@@ -180,6 +188,17 @@ internal sealed class IslandApp : IDisposable
                 if (!_menuOpen) SetTimer(hwnd, (UIntPtr)CollapseTimer, 180, IntPtr.Zero);
                 return IntPtr.Zero;
             case WM_LBUTTONUP:
+                if (_composer != null)
+                {
+                    float tx = (short)(lParam.ToInt64() & 0xffff) / _scale - (CanvasWidth - (float)_width.Value) / 2;
+                    float ty = (short)((lParam.ToInt64() >> 16) & 0xffff) / _scale;
+                    if (tx is >= 24 and <= 376 && ty is >= 75 and <= 109) { _composer.SelectField(false); FocusComposer(); }
+                    else if (tx is >= 24 and <= 376 && ty is >= 132 and <= 166) { _composer.SelectField(true); FocusComposer(); }
+                    else if (ty is >= 240 and <= 282 && tx is >= 202 and <= 278) CloseComposer();
+                    else if (ty is >= 240 and <= 282 && tx is >= 286 and <= 376) SaveComposer();
+                    _dirty = true;
+                    return IntPtr.Zero;
+                }
                 if (_agents?.Pending is { } request)
                 {
                     string details = $"{request.Agent} requests approval\n\nProject: {request.Project}\nTool: {request.Tool}\n\n{request.Details}\n\nAllow this action?";
@@ -232,6 +251,7 @@ internal sealed class IslandApp : IDisposable
                 Toggle();
                 return IntPtr.Zero;
             case WM_RBUTTONUP:
+                if (_composer != null) return IntPtr.Zero;
                 ShowMenu();
                 return IntPtr.Zero;
             case WM_TRAYICON:
@@ -282,6 +302,21 @@ internal sealed class IslandApp : IDisposable
             case 0x0218: // WM_POWERBROADCAST
                 RefreshBattery();
                 return new IntPtr(1);
+            case 0x0008: // WM_KILLFOCUS
+                if (_composer != null) { _composer.Focused = false; _dirty = true; }
+                return IntPtr.Zero;
+            case WM_KEYDOWN:
+                if (_composer != null) { HandleComposerKey((int)wParam.ToInt64()); return IntPtr.Zero; }
+                break;
+            case 0x0102: // WM_CHAR
+                if (_composer != null)
+                {
+                    char ch = (char)wParam.ToInt64();
+                    if (!char.IsControl(ch)) _composer.Insert(ch.ToString());
+                    _dirty = true;
+                    return IntPtr.Zero;
+                }
+                break;
             case WM_DISPLAYCHANGE:
             case WM_DPICHANGED:
                 BuildSurface();
@@ -346,7 +381,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done));
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done), _composer);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -380,6 +415,8 @@ internal sealed class IslandApp : IDisposable
 
     private void ShowMenu()
     {
+        IntPtr foreground = GetForegroundWindow();
+        if (foreground != IntPtr.Zero && foreground != _hwnd) _previousForeground = foreground;
         _menuOpen = true;
         KillTimer(_hwnd, (UIntPtr)CollapseTimer);
         IntPtr menu = CreatePopupMenu();
@@ -476,7 +513,7 @@ internal sealed class IslandApp : IDisposable
             else if (command == 16)
             {
                 if (_settings.Tasks.Count >= 30) MessageBox(_hwnd, "Xylo supports up to 30 tasks.", "Xylo tasks", 0x40);
-                else if (TaskDialog.Edit(_hwnd, null) is { } task) { _settings.Tasks.Add(task); SaveTasks(); }
+                else BeginComposer(null);
             }
             else if (command >= 200 && command < 230 && command - 200 < _settings.Tasks.Count)
             {
@@ -487,7 +524,7 @@ internal sealed class IslandApp : IDisposable
             else if (command >= 300 && command < 330 && command - 300 < _settings.Tasks.Count)
             {
                 int index = (int)command - 300;
-                if (TaskDialog.Edit(_hwnd, _settings.Tasks[index]) is { } edited) { _settings.Tasks[index] = edited; SaveTasks(); }
+                BeginComposer(index);
             }
             else if (command >= 400 && command < 430 && command - 400 < _settings.Tasks.Count)
             {
@@ -539,6 +576,75 @@ internal sealed class IslandApp : IDisposable
         try { _settings.Save(); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { MessageBox(_hwnd, "Tasks could not be saved; changes remain available until Xylo exits.", "Xylo tasks", 0x10); }
+        _dirty = true;
+    }
+
+    private void BeginComposer(int? index)
+    {
+        if (_composer != null) return;
+        _composer = new TaskComposer(index, index is int i ? _settings.Tasks[i] : null);
+        _originalWindowStyle = GetWindowLongPtr(_hwnd, -20);
+        _expanded = true;
+        UpdateTarget();
+        FocusComposer();
+        _dirty = true;
+    }
+
+    private void FocusComposer()
+    {
+        if (_composer == null) return;
+        IntPtr foreground = GetForegroundWindow();
+        if (foreground != IntPtr.Zero && foreground != _hwnd) _previousForeground = foreground;
+        SetWindowLongPtr(_hwnd, -20, new IntPtr(_originalWindowStyle.ToInt64() & ~WS_EX_NOACTIVATE));
+        if (SetForegroundWindow(_hwnd)) SetFocus(_hwnd);
+        _composer.Focused = GetForegroundWindow() == _hwnd;
+    }
+
+    private void CloseComposer()
+    {
+        if (_composer == null) return;
+        _composer = null;
+        bool restoreFocus = GetForegroundWindow() == _hwnd;
+        SetWindowLongPtr(_hwnd, -20, _originalWindowStyle);
+        if (restoreFocus && _previousForeground != IntPtr.Zero && IsWindow(_previousForeground)) SetForegroundWindow(_previousForeground);
+        GetCursorPos(out var cursor);
+        _expanded = IsInsidePill((cursor.X - _x) / _scale, (cursor.Y - _y) / _scale);
+        UpdateTarget();
+        _dirty = true;
+    }
+
+    private void SaveComposer()
+    {
+        if (_composer == null) return;
+        var task = _composer.Build();
+        if (task == null) { _dirty = true; return; }
+        if (_composer.EditIndex is int index && index >= 0 && index < _settings.Tasks.Count) _settings.Tasks[index] = task;
+        else if (_composer.EditIndex == null && _settings.Tasks.Count < 30) _settings.Tasks.Add(task);
+        else { CloseComposer(); return; }
+        if (_taskTest)
+        {
+            TaskTestSucceeded = task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
+        }
+        else SaveTasks();
+        CloseComposer();
+        if (_taskTest) PostMessage(_hwnd, 0x0010, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    private void HandleComposerKey(int key)
+    {
+        if (_composer == null) return;
+        bool control = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+        if (control && key == 0x41) _composer.SelectAll();
+        else if (control && key == VK_KEY_V) _composer.Insert(ClipboardHistory.ReadText(_hwnd) ?? "");
+        else if (key == VK_ESCAPE) CloseComposer();
+        else if (key == VK_RETURN) SaveComposer();
+        else if (key == 0x09) _composer.SelectField(!_composer.EditingDue);
+        else if (key == VK_BACK) _composer.Backspace();
+        else if (key == VK_DELETE) _composer.Delete();
+        else if (key == VK_LEFT) _composer.Move(-1);
+        else if (key == VK_RIGHT) _composer.Move(1);
+        else if (key == VK_HOME) _composer.Home();
+        else if (key == VK_END) _composer.End();
         _dirty = true;
     }
 

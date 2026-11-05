@@ -10,20 +10,25 @@ internal sealed class ClipboardHistory
 
     public void Capture(IntPtr hwnd)
     {
-        if (!Native.IsClipboardFormatAvailable(Native.CF_UNICODETEXT) || !Native.OpenClipboard(hwnd)) return;
+        string? value = ReadText(hwnd);
+        if (value != null) Add(value);
+    }
+
+    public static string? ReadText(IntPtr hwnd)
+    {
+        if (!Native.IsClipboardFormatAvailable(Native.CF_UNICODETEXT) || !Native.OpenClipboard(hwnd)) return null;
         try
         {
             IntPtr data = Native.GetClipboardData(Native.CF_UNICODETEXT);
-            if (data == IntPtr.Zero) return;
+            if (data == IntPtr.Zero) return null;
             nuint size = Native.GlobalSize(data);
-            if (size == 0 || size > (MaxCharacters + 1) * 2) return;
+            if (size == 0 || size > (MaxCharacters + 1) * 2) return null;
             IntPtr ptr = Native.GlobalLock(data);
-            if (ptr == IntPtr.Zero) return;
+            if (ptr == IntPtr.Zero) return null;
             try
             {
                 int length = checked((int)size / 2);
-                string value = Marshal.PtrToStringUni(ptr, length)?.TrimEnd('\0') ?? "";
-                Add(value);
+                return Marshal.PtrToStringUni(ptr, length)?.TrimEnd('\0');
             }
             finally { Native.GlobalUnlock(data); }
         }

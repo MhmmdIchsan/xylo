@@ -42,6 +42,12 @@ internal static partial class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern bool IsDialogMessage(IntPtr hwnd, ref MSG message);
 
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    public static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int MessageBox(IntPtr hwnd, string text, string caption, uint type);
 }
