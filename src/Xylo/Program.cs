@@ -14,6 +14,7 @@ internal static class Program
         if (args.Contains("--test-volume")) return SelfTest.RunVolume();
         if (args.Contains("--test-brightness")) return SelfTest.RunBrightness();
         if (args.Contains("--test-agent-input")) return SelfTest.RunAgentInput();
+        if (args.Contains("--test-codex-limits")) return SelfTest.RunCodexLimits();
         using var instance = new Mutex(true, @"Local\Xylo.Desktop", out bool created);
         if (!created) return 0;
         try

@@ -14,7 +14,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, IReadOnlyList<NotificationPreview> notifications, bool notificationsEnabled, bool clipboardEnabled, IReadOnlyList<string> clipboardItems, bool showBatteryPercent, IReadOnlyList<int> visibleTabs, IReadOnlyList<AgentActivity> agents, bool doNotDisturb)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, IReadOnlyList<NotificationPreview> notifications, bool notificationsEnabled, bool clipboardEnabled, IReadOnlyList<string> clipboardItems, bool showBatteryPercent, IReadOnlyList<int> visibleTabs, IReadOnlyList<AgentActivity> agents, bool doNotDisturb, CodexLimits? codexLimits, string codexLimitStatus)
     {
         if (media == null && _artData != null) { _artwork?.Dispose(); _artwork = null; _artData = null; }
         canvas.Clear(SKColors.Transparent);
@@ -274,8 +274,19 @@ internal sealed class IslandRenderer : IDisposable
                         Text(canvas, Truncate(name, 126, 12), left + 43, 132 + 23 * i, 12, new SKColor(130, 230, 190));
                         Text(canvas, Truncate(item.Project, 200, 11), left + 174, 132 + 23 * i, 11, new SKColor(160, 169, 179));
                     }
-                    if (agents.Count > 3) Text(canvas, $"+{agents.Count - 3} more", left + 24, 197, 10, new SKColor(160, 169, 179));
-                    else if (agents.Count <= 3) CenterText(canvas, "Approval requests appear automatically", left + width / 2, 207, 10, new SKColor(160, 169, 179));
+                    if (agents.Count > 3) Text(canvas, $"+{agents.Count - 3} more", left + 24, 196, 10, new SKColor(160, 169, 179));
+                    if (height > 250)
+                    {
+                        _paint.Color = new SKColor(255, 255, 255, 25); canvas.DrawLine(left + 24, 205, left + 376, 205, _paint);
+                        Text(canvas, "Codex limits · local account", left + 24, 222, 11, new SKColor(160, 169, 179));
+                        if (codexLimits == null) Text(canvas, Truncate(codexLimitStatus, 352, 11), left + 24, 250, 11, new SKColor(160, 169, 179));
+                        else
+                        {
+                            DrawQuota(canvas, left + 24, 242, codexLimits.Primary);
+                            DrawQuota(canvas, left + 202, 242, codexLimits.Secondary);
+                            Text(canvas, "Updated " + codexLimits.Updated.ToLocalTime().ToString("HH:mm"), left + 24, 289, 9, new SKColor(130, 145, 145));
+                        }
+                    }
                 }
                 else if (slide == 2)
                 {
@@ -376,6 +387,17 @@ internal sealed class IslandRenderer : IDisposable
         canvas.DrawRoundRect(new SKRect(x, y, x + width, y + 4), 2, 2, _paint);
         _paint.Color = new SKColor(130, 230, 190);
         canvas.DrawRoundRect(new SKRect(x, y, x + width * Math.Clamp(progress, 0, 1), y + 4), 2, 2, _paint);
+    }
+
+    private void DrawQuota(SKCanvas canvas, float x, float y, CodexLimitWindow? window)
+    {
+        string title = window == null ? "Not available" : $"{window.Label} · {window.RemainingPercent:0}% left";
+        Text(canvas, title, x, y, 11, SKColors.White);
+        if (window != null)
+        {
+            DrawProgress(canvas, x, y + 7, 150, (float)(window.RemainingPercent / 100));
+            Text(canvas, window.ResetsAt is DateTimeOffset reset ? "Reset " + reset.ToString("ddd HH:mm") : "Reset time unavailable", x, y + 28, 9, new SKColor(160, 169, 179));
+        }
     }
 
     private void DrawArtwork(SKCanvas canvas, float x, float y, byte[]? bytes)

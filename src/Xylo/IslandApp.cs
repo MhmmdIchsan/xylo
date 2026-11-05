@@ -49,6 +49,7 @@ internal sealed partial class IslandApp : IDisposable
     private ConnectivityService? _connectivity;
     private VolumeHudService? _volumeHud;
     private BrightnessHudService? _brightnessHud;
+    private CodexLimitService? _codexLimits;
     private NotificationPreview? _pendingHud;
     private readonly Queue<NotificationPreview> _notificationQueue = new();
     private NotificationPreview? _preview;
@@ -100,6 +101,7 @@ internal sealed partial class IslandApp : IDisposable
             _agents = new AgentBridge(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero),
                 activity => EnqueueNotification(new NotificationPreview("AI Agent", activity.Agent + " finished", activity.Project)));
             _agents.Start();
+            _codexLimits = new CodexLimitService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             if (_settings.LyricsEnabled) StartLyrics();
             _media = new MediaService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _media.Start();
@@ -173,7 +175,7 @@ internal sealed partial class IslandApp : IDisposable
         bool needsApproval = _agents?.Pending != null || _agents?.Notice != null;
         bool wideMusic = _expanded && _slide == 4 && _settings.LyricsEnabled && _prompt == null && _review == null && _composer == null && _panel == null && _agents?.Pending == null && _agents?.Notice == null && _preview == null;
         double targetWidth = wideMusic ? Math.Min(660, Math.Max(400, (_displayBounds.right - _displayBounds.left) / _scale - 20)) : _prompt != null || _composer != null || _panel != null || _expanded ? 400 : (needsApproval ? 300 : needsDetail ? 400 : _slide == 1 && _agents?.Activity != null ? 300 : 220);
-        double targetHeight = _prompt != null ? 300 : _review != null && _expanded ? 400 : _composer != null ? 300 : _panel != null ? 380 : _expanded ? 236 : needsApproval ? 42 : (needsDetail ? 68 : 42);
+        double targetHeight = _prompt != null ? 300 : _review != null && _expanded ? 400 : _composer != null ? 300 : _panel != null ? 380 : _expanded ? (_slide == 1 && !needsApproval && _preview == null ? 300 : 236) : needsApproval ? 42 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
         _width.Target = targetWidth;
         _height.Target = targetHeight;
@@ -613,7 +615,8 @@ internal sealed partial class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _notifications?.ActiveNotifications ?? Array.Empty<NotificationPreview>(), _notifications?.Active == true, _clipboardListening, _clipboard.Items, _settings.ShowBatteryPercent, _settings.VisibleTabs(), _slide == 1 ? _agents?.Activities ?? Array.Empty<AgentActivity>() : Array.Empty<AgentActivity>(), _doNotDisturb);
+        if (_expanded && _slide == 1 && _panel == null && _prompt == null && _composer == null && _review == null && _preview == null && _agents?.Pending == null && _agents?.Notice == null) _codexLimits?.RefreshIfDue();
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _notifications?.ActiveNotifications ?? Array.Empty<NotificationPreview>(), _notifications?.Active == true, _clipboardListening, _clipboard.Items, _settings.ShowBatteryPercent, _settings.VisibleTabs(), _slide == 1 ? _agents?.Activities ?? Array.Empty<AgentActivity>() : Array.Empty<AgentActivity>(), _doNotDisturb, _codexLimits?.Snapshot, _codexLimits?.Status ?? "Codex limits unavailable");
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -868,6 +871,7 @@ internal sealed partial class IslandApp : IDisposable
         _connectivity?.Dispose();
         _volumeHud?.Dispose();
         _brightnessHud?.Dispose();
+        _codexLimits?.Dispose();
         if (_clipboardListening) RemoveClipboardFormatListener(_hwnd);
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);

@@ -2,6 +2,14 @@ namespace Xylo;
 
 internal static class SelfTest
 {
+    public static int RunCodexLimits()
+    {
+        using var service = new CodexLimitService(() => { });
+        service.RefreshIfDue();
+        for (int i = 0; i < 180 && service.Status == "Loading Codex limits..."; i++) Thread.Sleep(100);
+        return service.Snapshot is { Primary: not null } or { Secondary: not null } ? 0 : 1;
+    }
+
     public static int RunAgentInput()
     {
         try
@@ -43,7 +51,7 @@ internal static class SelfTest
             renderer.Draw(canvas, 1, 400, 236, false, new BatteryStatus(null, false, null), seconds, -1,
                 null, null, false, new FocusTimer(), null, 0, agent, null, null, Array.Empty<TaskItem>(), 1,
                 null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true,
-                Enumerable.Range(0, 7).ToArray(), new[] { agent }, false);
+                Enumerable.Range(0, 7).ToArray(), new[] { agent }, false, null, "Unavailable");
             canvas.Flush();
         }
         Render(first, 0); Render(second, 0.7);
@@ -66,7 +74,7 @@ internal static class SelfTest
         renderer.Draw(canvas, 1, 660, 236, false, new BatteryStatus(null, false, null), 0, -1,
             media, new LyricsSnapshot("test", Array.Empty<LyricLine>(), "one\ntwo", "missing"), true,
             new FocusTimer(), null, 0, null, null, null, Array.Empty<TaskItem>(), 4,
-            null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true, Enumerable.Range(0, 7).ToArray(), Array.Empty<AgentActivity>(), false);
+            null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true, Enumerable.Range(0, 7).ToArray(), Array.Empty<AgentActivity>(), false, null, "Unavailable");
         canvas.Flush();
         var pixel = bitmap.GetPixel(89, 139);
         return pixel.Red > 180 && pixel.Green < 60;
@@ -137,6 +145,8 @@ internal static class SelfTest
         var wifiConnected = ConnectivityService.WifiAlert(new WifiState(false, ""), new WifiState(true, "test network"));
         var wifiSame = ConnectivityService.WifiAlert(new WifiState(true, "test network"), new WifiState(true, "test network"));
         var muted = VolumeHudService.Preview(0.8f, true);
+        using var limitsJson = System.Text.Json.JsonDocument.Parse("{\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":25,\"windowDurationMins\":300,\"resetsAt\":1730947200},\"secondary\":{\"usedPercent\":70,\"windowDurationMins\":10080}}}}");
+        var limits = CodexLimitService.Parse(limitsJson.RootElement);
         bool staysLocked = !review.CanApprove;
         review.Next();
         bool valid = TestMediaRendering() && TestAgentAnimation() && lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
@@ -162,6 +172,8 @@ internal static class SelfTest
             && AgentBridge.ActivityForEvent("Codex", "s", "p", "UserPromptSubmit").Working
             && AgentBridge.ActivityForEvent("Codex", "s", "p", "Interrupt") is { Working: false, Interrupted: true }
             && AgentBridge.ActivityForEvent("Codex", "s", "p", "Stop") is { Working: false, Interrupted: false }
+            && AgentBridge.ActivityForEvent("Codex", "s", "p", "Stop", AgentBridge.ActivityForEvent("Codex", "s", "p", "Interrupt")) is { Working: false, Interrupted: true }
+            && limits?.Primary is { RemainingPercent: 75, Label: "5h" } && limits.Secondary is { RemainingPercent: 30, Label: "Weekly" }
             && BrightnessHudService.Preview(55).Progress == 0.55f;
         return valid ? 0 : 1;
     }
