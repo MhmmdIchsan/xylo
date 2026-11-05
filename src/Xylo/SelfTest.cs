@@ -31,8 +31,9 @@ internal static class SelfTest
             bool waiting = bridge.Notice is { InputRequired: true } && bridge.FindActivity("Codex:xylo-selftest") is { Working: false, WindowHandle: 1234, WindowPid: 55 };
             Send("InputResolved", "r1");
             bool resumed = bridge.Notice == null && bridge.FindActivity("Codex:xylo-selftest") is { Working: true };
+            Send("InputRequired", "r2");
             Send("Interrupt");
-            bool interrupted = bridge.FindActivity("Codex:xylo-selftest") is { Working: false, Interrupted: true, WindowHandle: 1234, WindowPid: 55 };
+            bool interrupted = bridge.Notice == null && bridge.FindActivity("Codex:xylo-selftest") is { Working: false, Interrupted: true, WindowHandle: 1234, WindowPid: 55 };
             Send("SessionEnd");
             return waiting && resumed && interrupted && bridge.Activity == null ? 0 : 1;
         }

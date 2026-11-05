@@ -8,6 +8,9 @@ internal sealed class IslandRenderer : IDisposable
     private readonly SKPaint _paint = new() { IsAntialias = true };
     private readonly SKFont _font;
     private readonly SKPath _outline = new();
+    private readonly SKPath _maskPath = new();
+    private readonly SKPath _maskSegment = new();
+    private readonly SKPathMeasure _maskMeasure = new();
     private readonly SKPaint _contentOpacity = new();
     private byte[]? _artData;
     private SKBitmap? _artwork;
@@ -64,6 +67,24 @@ internal sealed class IslandRenderer : IDisposable
         _paint.StrokeWidth = 1;
         _paint.Color = attention ? new SKColor(255, 185, 100, (byte)(100 + 90 * pulse)) : isWorking ? new SKColor(130, 230, 190, (byte)(100 + 70 * pulse)) : new SKColor(100, 117, 119, 130);
         canvas.DrawRoundRect(mask, 9, 9, _paint);
+        if (isWorking)
+        {
+            _maskMeasure.SetPath(null, false);
+            _maskPath.Reset();
+            _maskPath.AddRoundRect(mask, 9, 9);
+            _maskMeasure.SetPath(_maskPath, false);
+            float length = _maskMeasure.Length;
+            if (length > 0)
+            {
+                float start = (float)(seconds * 42 % length), end = start + length * 0.28f;
+                _maskSegment.Reset();
+                _maskMeasure.GetSegment(start, Math.Min(end, length), _maskSegment, true);
+                if (end > length) _maskMeasure.GetSegment(0, end - length, _maskSegment, true);
+                _paint.StrokeWidth = 2;
+                _paint.Color = new SKColor(150, 245, 205);
+                canvas.DrawPath(_maskSegment, _paint);
+            }
+        }
         _paint.Color = new SKColor(255, 255, 255, 35);
         canvas.DrawLine(left + 20, 10, left + 35, 10, _paint);
         float blink = blinkStarted < 0 ? 0 : (float)Math.Sin(Math.Clamp((seconds - blinkStarted) / 0.3, 0, 1) * Math.PI);
@@ -74,6 +95,13 @@ internal sealed class IslandRenderer : IDisposable
         if (attention) eyeHeight += (pulse - 0.5f) * 1.1f;
         foreach (float eyeX in new[] { left + 22, left + 33 })
         {
+            if (!attention && !isWorking)
+            {
+                _paint.StrokeWidth = 1.7f;
+                _paint.Color = new SKColor(120, 175, 155);
+                canvas.DrawArc(new SKRect(eyeX - 3.5f, 19, eyeX + 3.5f, 23), 10, 160, false, _paint);
+                continue;
+            }
             _paint.StrokeWidth = 4;
             _paint.Color = attention ? new SKColor(255, 170, 80, (byte)(30 + 40 * pulse)) : new SKColor(100, 240, 185, isWorking ? (byte)(30 + 35 * pulse) : (byte)20);
             canvas.DrawLine(eyeX + thinking - 3, 21 - eyeHeight, eyeX + thinking + 3, 21 + eyeHeight, _paint);
@@ -85,6 +113,19 @@ internal sealed class IslandRenderer : IDisposable
         }
         _paint.Style = SKPaintStyle.Fill;
         canvas.Restore();
+        if (attention)
+        {
+            _paint.Color = new SKColor(255, 179, 91);
+            canvas.DrawCircle(left + 43, 9, 5, _paint);
+            _paint.Color = new SKColor(33, 26, 20); _paint.Style = SKPaintStyle.Stroke; _paint.StrokeWidth = 1.5f;
+            canvas.DrawLine(left + 43, 6.5f, left + 43, 9.5f, _paint);
+            _paint.Style = SKPaintStyle.Fill; canvas.DrawCircle(left + 43, 11.5f, 0.8f, _paint);
+        }
+        else if (!isWorking)
+        {
+            Text(canvas, "z", left + 32, 7, 6, new SKColor(150, 190, 178));
+            Text(canvas, "z", left + 39, 5, 5, new SKColor(115, 155, 150));
+        }
         if (prompt != null)
             Text(canvas, "Attention", left + 52, 26, 12, SKColors.White);
         else if (review != null && height > 100)
@@ -610,6 +651,9 @@ internal sealed class IslandRenderer : IDisposable
     public void Dispose()
     {
         _artwork?.Dispose();
+        _maskMeasure.Dispose();
+        _maskSegment.Dispose();
+        _maskPath.Dispose();
         _font.Dispose();
         _outline.Dispose();
         _contentOpacity.Dispose();

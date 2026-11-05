@@ -62,7 +62,7 @@ for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
     process.stdin.close()
     time.sleep(0.5)
     hover()  # Hover opens the review
-    time.sleep(1)
+    time.sleep(1.8)  # Let the hover expansion settle before selecting a response.
     if choice == 6:
         rect = Rect()
         user32.GetWindowRect(ctypes.c_void_p(window), ctypes.byref(rect))
@@ -71,7 +71,7 @@ for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
         time.sleep(1)
         assert process.poll() is None, "Leaving the notch unexpectedly resolved the request"
         hover()
-        time.sleep(1)
+        time.sleep(1.8)
     scale = notch_scale()
     x = int(({6: 336, 7: 210, 2: 94}[choice] + 130) * scale)
     y = int(373 * scale)
@@ -105,7 +105,7 @@ if agent == "codex":
         process.stdin.close()
         time.sleep(0.5)
         hover()  # Hover opens the review
-        time.sleep(1)
+        time.sleep(1.8)
         scale = notch_scale()
         def click(x, y):
             user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, int((x + 130) * scale) | (int(y * scale) << 16))
