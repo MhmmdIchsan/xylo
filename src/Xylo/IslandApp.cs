@@ -11,7 +11,7 @@ internal sealed partial class IslandApp : IDisposable
 {
     public const float CanvasWidth = 700;
     private const float CanvasHeight = 420;
-    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9, ClockTimer = 10, AgentFrameTimer = 11;
+    private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9, ClockTimer = 10, AgentFrameTimer = 11, UserIdleTimer = 12;
     private const uint PreviewMessage = 0x8004, NotificationStatusMessage = 0x8005, HudMessage = 0x8006;
     private readonly WndProc _windowProcedure;
     private readonly IslandRenderer _renderer = new();
@@ -41,6 +41,9 @@ internal sealed partial class IslandApp : IDisposable
     private long _idleRenderStart;
     private BatteryStatus _battery;
     private bool _batteryInitialized;
+    private bool _userAfk, _inputInitialized;
+    private uint _lastInputTick;
+    private double _userMotionStarted = -1;
     private MediaService? _media;
     private LyricsService? _lyrics;
     private AgentBridge? _agents;
@@ -111,9 +114,11 @@ internal sealed partial class IslandApp : IDisposable
             if (_settings.BrightnessHudEnabled) StartBrightnessHud();
         }
         RefreshBattery();
+        if (!_smokeTest && !_taskTest) RefreshUserIdle();
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BatteryTimer, 60000, IntPtr.Zero);
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BlinkTimer, 8000, IntPtr.Zero);
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)ClockTimer, 60000, IntPtr.Zero);
+        if (!_smokeTest && !_taskTest) SetTimer(_hwnd, (UIntPtr)UserIdleTimer, 2000, IntPtr.Zero);
         BuildSurface();
         Draw();
         ShowWindow(_hwnd, SW_SHOWNOACTIVATE);
@@ -211,6 +216,7 @@ internal sealed partial class IslandApp : IDisposable
                 return new IntPtr(IsInsidePill(x, y) ? HTCLIENT : HTTRANSPARENT);
             case WM_MOUSEMOVE:
                 if (_smokeTest) return IntPtr.Zero;
+                if (!_taskTest) RefreshUserIdle();
                 if (!_trackingMouse)
                 {
                     var tracking = new TRACKMOUSEEVENT
@@ -455,9 +461,10 @@ internal sealed partial class IslandApp : IDisposable
                 else if (wParam.ToInt64() == ChargeAnimationTimer) _dirty = true;
                 else if (wParam.ToInt64() == AgentFrameTimer)
                 {
-                    if (!MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice)) KillTimer(hwnd, (UIntPtr)AgentFrameTimer);
+                    if (!MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice, UserMotionActive())) KillTimer(hwnd, (UIntPtr)AgentFrameTimer);
                     else _dirty = true;
                 }
+                else if (wParam.ToInt64() == UserIdleTimer) RefreshUserIdle();
                 else if (wParam.ToInt64() == ClockTimer) _dirty = true;
                 else if (wParam.ToInt64() == BlinkTimer)
                 {
@@ -547,12 +554,31 @@ internal sealed partial class IslandApp : IDisposable
 
     private void SyncAgentAnimation()
     {
-        if (MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice)) SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, 50, IntPtr.Zero);
+        if (MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice, UserMotionActive())) SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, 50, IntPtr.Zero);
         else KillTimer(_hwnd, (UIntPtr)AgentFrameTimer);
     }
 
-    internal static bool MascotNeedsAnimation(AgentActivity? activity, AgentApproval? approval, AgentNotice? notice) =>
-        activity?.Working == true || approval != null || notice != null;
+    internal static bool MascotNeedsAnimation(AgentActivity? activity, AgentApproval? approval, AgentNotice? notice, bool userMotion = false) =>
+        activity?.Working == true || approval != null || notice != null || userMotion;
+
+    private bool UserMotionActive() => !_userAfk && _userMotionStarted >= 0 && _clock.Elapsed.TotalSeconds - _userMotionStarted < 0.7;
+    internal static bool IsUserAfk(uint now, uint lastInput) => unchecked(now - lastInput) >= 60000;
+
+    private void RefreshUserIdle()
+    {
+        var info = new LASTINPUTINFO { Size = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+        if (!GetLastInputInfo(ref info)) return;
+        bool idle = IsUserAfk(unchecked((uint)Environment.TickCount64), info.Time);
+        bool freshInput = _inputInitialized && info.Time != _lastInputTick && !idle;
+        _lastInputTick = info.Time;
+        _inputInitialized = true;
+        if (_userAfk != idle) { _userAfk = idle; _dirty = true; }
+        if (freshInput)
+        {
+            _userMotionStarted = _clock.Elapsed.TotalSeconds;
+            SyncAgentAnimation();
+        }
+    }
 
     private void BeginHoverReview()
     {
@@ -620,7 +646,7 @@ internal sealed partial class IslandApp : IDisposable
     {
         if (_surface is null) return;
         if (_expanded && _slide == 1 && _panel == null && _prompt == null && _composer == null && _review == null && _preview == null && _agents?.Pending == null && _agents?.Notice == null) _codexLimits?.RefreshIfDue();
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _notifications?.ActiveNotifications ?? Array.Empty<NotificationPreview>(), _notifications?.Active == true, _clipboardListening, _clipboard.Items, _settings.ShowBatteryPercent, _settings.VisibleTabs(), _slide == 1 ? _agents?.Activities ?? Array.Empty<AgentActivity>() : Array.Empty<AgentActivity>(), _doNotDisturb, _codexLimits?.Snapshot, _codexLimits?.Status ?? "Codex limits unavailable");
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _notifications?.ActiveNotifications ?? Array.Empty<NotificationPreview>(), _notifications?.Active == true, _clipboardListening, _clipboard.Items, _settings.ShowBatteryPercent, _settings.VisibleTabs(), _slide == 1 ? _agents?.Activities ?? Array.Empty<AgentActivity>() : Array.Empty<AgentActivity>(), _doNotDisturb, _codexLimits?.Snapshot, _codexLimits?.Status ?? "Codex limits unavailable", _userAfk, _userMotionStarted);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();

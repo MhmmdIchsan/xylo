@@ -4,6 +4,10 @@ namespace Xylo;
 
 internal static partial class Native
 {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LASTINPUTINFO { public uint Size; public uint Time; }
+    [DllImport("user32.dll")]
+    public static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
     public delegate bool MonitorEnumProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
     [DllImport("user32.dll")]
     public static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorEnumProc callback, IntPtr data);

@@ -46,7 +46,7 @@ internal static class SelfTest
         using var first = new SkiaSharp.SKBitmap(700, 420);
         using var second = new SkiaSharp.SKBitmap(700, 420);
         using var renderer = new IslandRenderer();
-        bool HasMotion(AgentActivity? state, AgentApproval? approval, AgentNotice? notice)
+        bool HasMotion(AgentActivity? state, AgentApproval? approval, AgentNotice? notice, bool userAfk = false, double userMotionStarted = -1)
         {
             void Render(SkiaSharp.SKBitmap bitmap, double seconds)
             {
@@ -54,10 +54,10 @@ internal static class SelfTest
                 renderer.Draw(canvas, 1, 400, 236, false, new BatteryStatus(null, false, null), seconds, -1,
                     null, null, false, new FocusTimer(), approval, 0, state, null, notice, Array.Empty<TaskItem>(), 1,
                     null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true,
-                    Enumerable.Range(0, 7).ToArray(), state == null ? Array.Empty<AgentActivity>() : new[] { state }, false, null, "Unavailable");
+                    Enumerable.Range(0, 7).ToArray(), state == null ? Array.Empty<AgentActivity>() : new[] { state }, false, null, "Unavailable", userAfk, userMotionStarted);
                 canvas.Flush();
             }
-            Render(first, 0); Render(second, 0.7);
+            Render(first, 0); Render(second, 0.35);
             for (int y = 6; y <= 37; y++)
                 for (int x = 158; x <= 196; x++)
                     if (first.GetPixel(x, y) != second.GetPixel(x, y)) return true;
@@ -67,6 +67,7 @@ internal static class SelfTest
         var input = new AgentNotice("Codex", "test", "r", "User input", "test", DateTimeOffset.UtcNow, true);
         var interrupted = agent with { Working = false, Interrupted = true };
         return HasMotion(agent, null, null) && HasMotion(null, approval, null) && HasMotion(null, null, input) && !HasMotion(null, null, null)
+            && HasMotion(null, null, null, false, 0) && !HasMotion(null, null, null, true)
             && IslandApp.MascotNeedsAnimation(agent, null, null) && IslandApp.MascotNeedsAnimation(null, approval, null)
             && IslandApp.MascotNeedsAnimation(null, null, input) && !IslandApp.MascotNeedsAnimation(interrupted, null, null);
     }
@@ -84,7 +85,7 @@ internal static class SelfTest
         renderer.Draw(canvas, 1, 660, 236, false, new BatteryStatus(null, false, null), 0, -1,
             media, new LyricsSnapshot("test", Array.Empty<LyricLine>(), "one\ntwo", "missing"), true,
             new FocusTimer(), null, 0, null, null, null, Array.Empty<TaskItem>(), 4,
-            null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true, Enumerable.Range(0, 7).ToArray(), Array.Empty<AgentActivity>(), false, null, "Unavailable");
+            null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true, Enumerable.Range(0, 7).ToArray(), Array.Empty<AgentActivity>(), false, null, "Unavailable", false, -1);
         canvas.Flush();
         var pixel = bitmap.GetPixel(89, 139);
         return pixel.Red > 180 && pixel.Green < 60;
@@ -155,6 +156,8 @@ internal static class SelfTest
         var wifiConnected = ConnectivityService.WifiAlert(new WifiState(false, ""), new WifiState(true, "test network"));
         var wifiSame = ConnectivityService.WifiAlert(new WifiState(true, "test network"), new WifiState(true, "test network"));
         var muted = VolumeHudService.Preview(0.8f, true);
+        var inputInfo = new Native.LASTINPUTINFO { Size = (uint)System.Runtime.InteropServices.Marshal.SizeOf<Native.LASTINPUTINFO>() };
+        bool inputApiAvailable = Native.GetLastInputInfo(ref inputInfo);
         using var limitsJson = System.Text.Json.JsonDocument.Parse("{\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":25,\"windowDurationMins\":300,\"resetsAt\":1730947200},\"secondary\":{\"usedPercent\":70,\"windowDurationMins\":10080}}}}");
         var limits = CodexLimitService.Parse(limitsJson.RootElement);
         bool staysLocked = !review.CanApprove;
@@ -183,6 +186,9 @@ internal static class SelfTest
             && AgentBridge.ActivityForEvent("Codex", "s", "p", "Interrupt") is { Working: false, Interrupted: true }
             && AgentBridge.ActivityForEvent("Codex", "s", "p", "Stop") is { Working: false, Interrupted: false }
             && AgentBridge.ActivityForEvent("Codex", "s", "p", "Stop", AgentBridge.ActivityForEvent("Codex", "s", "p", "Interrupt")) is { Working: false, Interrupted: true }
+            && !IslandApp.IsUserAfk(100000, 41000) && IslandApp.IsUserAfk(100000, 40000)
+            && IslandApp.IsUserAfk(30000, unchecked((uint)(-40000)))
+            && inputApiAvailable
             && limits?.Primary is { RemainingPercent: 75, Label: "5h" } && limits.Secondary is { RemainingPercent: 30, Label: "Weekly" }
             && BrightnessHudService.Preview(55).Progress == 0.55f;
         return valid ? 0 : 1;

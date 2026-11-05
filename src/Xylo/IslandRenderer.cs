@@ -17,7 +17,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, IReadOnlyList<NotificationPreview> notifications, bool notificationsEnabled, bool clipboardEnabled, IReadOnlyList<string> clipboardItems, bool showBatteryPercent, IReadOnlyList<int> visibleTabs, IReadOnlyList<AgentActivity> agents, bool doNotDisturb, CodexLimits? codexLimits, string codexLimitStatus)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, IReadOnlyList<NotificationPreview> notifications, bool notificationsEnabled, bool clipboardEnabled, IReadOnlyList<string> clipboardItems, bool showBatteryPercent, IReadOnlyList<int> visibleTabs, IReadOnlyList<AgentActivity> agents, bool doNotDisturb, CodexLimits? codexLimits, string codexLimitStatus, bool userAfk, double userMotionStarted)
     {
         if (media == null && _artData != null) { _artwork?.Dispose(); _artwork = null; _artData = null; }
         canvas.Clear(SKColors.Transparent);
@@ -51,6 +51,7 @@ internal sealed class IslandRenderer : IDisposable
 
         bool attention = approval != null || notice != null || review != null;
         bool isWorking = !attention && agent?.Working == true;
+        bool sleeping = !attention && !isWorking && userAfk;
         float pulse = (float)(0.5 + 0.5 * Math.Sin(seconds * (attention ? 4.2 : 2.6)));
         float lift = attention ? -0.7f * pulse : isWorking ? -0.5f * pulse : 0;
         canvas.Save();
@@ -90,12 +91,13 @@ internal sealed class IslandRenderer : IDisposable
         float blink = blinkStarted < 0 ? 0 : (float)Math.Sin(Math.Clamp((seconds - blinkStarted) / 0.3, 0, 1) * Math.PI);
         float eyeHeight = (attention ? 4.7f : 4.0f) - blink * 3.3f;
         _paint.StrokeCap = SKStrokeCap.Round;
-        float thinking = isWorking ? (float)Math.Sin(seconds * 2.6) * 1.5f : 0;
+        double motionAge = seconds - userMotionStarted;
+        float thinking = isWorking ? (float)Math.Sin(seconds * 2.6) * 1.5f : !sleeping && userMotionStarted >= 0 && motionAge is >= 0 and < 0.7 ? (float)Math.Sin(motionAge / 0.7 * Math.PI) * 2 : 0;
         if (isWorking) eyeHeight += (float)Math.Sin(seconds * 2.6) * 0.8f;
         if (attention) eyeHeight += (pulse - 0.5f) * 1.1f;
         foreach (float eyeX in new[] { left + 22, left + 33 })
         {
-            if (!attention && !isWorking)
+            if (sleeping)
             {
                 _paint.StrokeWidth = 1.7f;
                 _paint.Color = new SKColor(120, 175, 155);
@@ -121,7 +123,7 @@ internal sealed class IslandRenderer : IDisposable
             canvas.DrawLine(left + 43, 6.5f, left + 43, 9.5f, _paint);
             _paint.Style = SKPaintStyle.Fill; canvas.DrawCircle(left + 43, 11.5f, 0.8f, _paint);
         }
-        else if (!isWorking)
+        else if (sleeping)
         {
             Text(canvas, "z", left + 32, 7, 6, new SKColor(150, 190, 178));
             Text(canvas, "z", left + 39, 5, 5, new SKColor(115, 155, 150));
