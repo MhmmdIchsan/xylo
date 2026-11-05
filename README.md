@@ -22,6 +22,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Shows synchronized lyrics beside the player when enabled. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source and available screen width.
 - Hover over the notch to see today's date and time, then choose Agent, Weather, To-do, Music, Clipboard, or Focus to switch views. The last selected view remains active when the notch closes and reopens; only Music shows the current media in the compact notch. Manage tasks, clipboard history, focus timer and weather directly from their views; approval requests remain visible regardless of the selected view.
 - Controls > Appearance provides battery percentage, attached/floating position, size, display selection, and tab visibility/order. Today remains available so controls can always be reached.
+- Controls > Appearance can enable or disable launching Xylo at Windows sign-in for the current user.
 - The Agent view shows up to three recent sessions at once. The Xylo mascot smoothly transitions between a moving outline while an agent works, an amber exclamation for input or approval, and softly fading z's after one minute without mouse or keyboard input. It wakes when you return; only the last-input timestamp is checked locally. Agent lifecycle state depends on the agent integration reporting events.
 - When the Agent view is open, Xylo asks the locally installed Codex app-server for the local account's available rate-limit windows and reset times. It refreshes at most every five minutes, starts no conversation, stores no credentials, and reports unavailable when the account or app-server does not provide limits. The short-lived helper process exits after each query.
 - The Music view has a lyrics on/off button. Agent completion notices require the corresponding agent hooks to report both start and completion.
@@ -41,7 +42,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - The controls switch between an attached notch and a floating island; the choice is saved locally.
 - `Ctrl+Alt+X` global toggle shortcut, when available.
 - DPI-aware rendering and surface recreation after display changes.
-- Single-instance startup and message-driven idle behavior: no continuous rendering when settled.
+- Single-instance startup and message-driven rendering; continuous frames are used only for active animations, including the sleeping mascot.
 
 ## Build and run
 
@@ -52,13 +53,21 @@ dotnet build src/Xylo/Xylo.csproj -c Release
 dotnet run --project src/Xylo/Xylo.csproj -c Release --no-build
 ```
 
-Right-click the notch or tray icon, or click the three dots in the expanded notch, to open its controls. Use **Next** in Controls to reach **Quit Xylo**. The notch currently uses the top center of the primary display; multi-monitor selection is planned.
+Right-click the notch or tray icon, or click the three dots in the expanded notch, to open its controls. Use **Next** in Controls to reach **Quit Xylo** and **Appearance**. The selected display can be changed in Appearance.
 
 Create a framework-dependent folder build (requires the .NET 8 x64 runtime on the target computer):
 
 ```powershell
 dotnet publish src/Xylo/Xylo.csproj -c Release --self-contained false -o artifacts/xylo
 ```
+
+For a standalone executable and a per-user Windows installer, install the .NET 8.0.427 SDK and Inno Setup, then run:
+
+```powershell
+powershell -File tools/build-release.ps1 -InnoCompiler "C:\path\to\ISCC.exe"
+```
+
+The output in `artifacts/release` includes a self-contained x64 `Xylo.exe` and `Xylo-Setup-0.1.0-win-x64.exe`. The installer does not require administrator rights and offers the current-user startup option. Installer builds are unsigned unless you sign them separately. The standalone file includes the .NET runtime; distribute the repository's license notices alongside it.
 
 The automated Windows smoke test runs ten expand/collapse transitions, checks for continued rendering at idle and GDI resource growth, and reports memory and CPU measurements:
 

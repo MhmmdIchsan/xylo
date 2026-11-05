@@ -20,3 +20,52 @@ jobs:
         with:
           name: xylo-win-x64
           path: artifacts/xylo/
+
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.427
+      - name: Install verified Inno Setup compiler in portable mode
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.1-x64.exe'
+          $compilerDir = Join-Path $env:RUNNER_TEMP 'inno-portable'
+          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe' -OutFile $installer
+          $signature = Get-AuthenticodeSignature -FilePath $installer
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Pyrsys B.V.') { throw 'Inno Setup signature verification failed.' }
+          $process = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/PORTABLE=1','/CURRENTUSER',"/DIR=$compilerDir") -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0 -or !(Test-Path (Join-Path $compilerDir 'ISCC.exe'))) { throw 'Inno Setup extraction failed.' }
+      - name: Build standalone executable and installer
+        shell: pwsh
+        run: ./tools/build-release.ps1 -InnoCompiler "$env:RUNNER_TEMP/inno-portable/ISCC.exe"
+      - name: Test standalone executable
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath (Resolve-Path 'artifacts/release/Xylo.exe') -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Standalone self-test failed.' }
+      - name: Test per-user installation and removal
+        shell: pwsh
+        run: |
+          $setup = Resolve-Path 'artifacts/release/Xylo-Setup-0.1.0-win-x64.exe'
+          $process = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=startup') -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Installer failed.' }
+          $appDir = Join-Path $env:LOCALAPPDATA 'Programs/Xylo'
+          $installed = Join-Path $appDir 'Xylo.exe'
+          $startup = (Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Xylo').Xylo
+          if (!(Test-Path $installed) -or $startup -ne ('"' + $installed + '"')) { throw 'Installation or startup registration failed.' }
+          $process = Start-Process -FilePath $installed -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Installed executable self-test failed.' }
+          $process = Start-Process -FilePath (Join-Path $appDir 'unins000.exe') -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0 -or (Test-Path $installed)) { throw 'Uninstall failed.' }
+          $value = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Xylo' -ErrorAction SilentlyContinue
+          if ($null -ne $value) { throw 'Startup registration remained after uninstall.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xylo-win-x64-installer
+          path: |
+            artifacts/release/Xylo.exe
+            artifacts/release/Xylo-Setup-*-win-x64.exe
+            artifacts/release/*-LICENSE.txt

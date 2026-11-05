@@ -207,6 +207,7 @@ internal static class SelfTest
             && !IslandApp.IsUserAfk(100000, 41000) && IslandApp.IsUserAfk(100000, 40000)
             && IslandApp.IsUserAfk(30000, unchecked((uint)(-40000)))
             && inputApiAvailable
+            && StartupService.CommandFor(@"C:\Program Files\Xylo\Xylo.exe") == "\"C:\\Program Files\\Xylo\\Xylo.exe\""
             && limits?.Primary is { RemainingPercent: 75, Label: "5h" } && limits.Secondary is { RemainingPercent: 30, Label: "Weekly" }
             && BrightnessHudService.Preview(55).Progress == 0.55f;
         return valid ? 0 : 1;

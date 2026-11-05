@@ -100,6 +100,12 @@ internal sealed partial class IslandApp
                 rows.Add(new($"Display: {Math.Clamp(_settings.MonitorIndex, 0, displays.Count - 1) + 1} / {displays.Count}", () =>
                 { _settings.MonitorIndex = (Math.Clamp(_settings.MonitorIndex, 0, displays.Count - 1) + 1) % displays.Count; SaveAppearance(); BuildSurface(); UpdateTarget(); }));
                 rows.Add(new("Tabs: visibility and order  >", () => NavigatePanel(PanelPage.Tabs)));
+                rows.Add(new(StartupService.Enabled ? "Start with Windows: On" : "Start with Windows: Off", () =>
+                {
+                    try { StartupService.SetEnabled(!StartupService.Enabled); }
+                    catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+                    { ShowPrompt("Startup", "Could not change the Windows startup setting."); }
+                }));
                 break;
             case PanelPage.Tabs:
                 title = "Arrange tabs";
