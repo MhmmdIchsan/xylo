@@ -162,7 +162,7 @@ internal sealed class AgentBridge : IDisposable
         root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
     private static long ReadInteger(JsonElement root, string key) => root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out long number) ? number : 0;
     internal static AgentActivity ActivityForEvent(string agent, string session, string project, string kind, AgentActivity? previous = null, long windowHandle = 0, int windowPid = 0) =>
-        new(agent, session, project, kind == "UserPromptSubmit", DateTimeOffset.UtcNow, kind == "Interrupt", windowHandle > 0 ? windowHandle : previous?.WindowHandle ?? 0, windowHandle > 0 ? windowPid : previous?.WindowPid ?? 0);
+        new(agent, session, project, kind == "UserPromptSubmit", DateTimeOffset.UtcNow, kind == "Interrupt" || kind == "Stop" && previous?.Interrupted == true, windowHandle > 0 ? windowHandle : previous?.WindowHandle ?? 0, windowHandle > 0 ? windowPid : previous?.WindowPid ?? 0);
     private static async Task RespondAsync(NamedPipeServerStream pipe, string json, CancellationToken token)
     {
         await pipe.WriteAsync(Encoding.UTF8.GetBytes(json + "\n"), token);

@@ -123,6 +123,8 @@ def main(agent="Codex"):
     result = exchange(message)
     if result:
         print(json.dumps(result))
+    elif kind == "Stop":
+        print("{}")
 
 
 if __name__ == "__main__":
