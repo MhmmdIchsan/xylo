@@ -53,6 +53,8 @@ internal sealed partial class IslandApp : IDisposable
     private readonly Queue<NotificationPreview> _notificationQueue = new();
     private NotificationPreview? _preview;
     private bool _notificationPrompt;
+    private volatile bool _doNotDisturb;
+    private bool _testDndToggled;
     private readonly ClipboardHistory _clipboard = new();
     private readonly FocusTimer _focus = new();
     private bool _clipboardListening;
@@ -68,6 +70,7 @@ internal sealed partial class IslandApp : IDisposable
         _smokeTest = smokeTest;
         _taskTest = taskTest;
         _settings = smokeTest || taskTest ? new Settings { Transient = true, ConnectivityAlertsEnabled = false, VolumeHudEnabled = false } : Settings.Load();
+        _doNotDisturb = _settings.DoNotDisturb;
         _slide = Math.Clamp(_settings.DashboardSlide, 0, 6);
         _windowProcedure = WindowProcedure;
     }
@@ -290,6 +293,8 @@ internal sealed partial class IslandApp : IDisposable
                     float py = (short)((lParam.ToInt64() >> 16) & 0xffff) / _scale;
                     if (px >= _width.Value - 104 && px <= _width.Value - 68 && py is >= 4 and <= 40)
                     { ShowMenu(); return IntPtr.Zero; }
+                    if (px >= _width.Value - 72 && px <= _width.Value - 40 && py is >= 4 and <= 40)
+                    { ToggleDnd(); return IntPtr.Zero; }
                 }
                 if (_preview != null) return IntPtr.Zero;
                 if (_expanded)
@@ -608,7 +613,7 @@ internal sealed partial class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _notifications?.ActiveNotifications ?? Array.Empty<NotificationPreview>(), _notifications?.Active == true, _clipboardListening, _clipboard.Items, _settings.ShowBatteryPercent, _settings.VisibleTabs(), _slide == 1 ? _agents?.Activities ?? Array.Empty<AgentActivity>() : Array.Empty<AgentActivity>());
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _notifications?.ActiveNotifications ?? Array.Empty<NotificationPreview>(), _notifications?.Active == true, _clipboardListening, _clipboard.Items, _settings.ShowBatteryPercent, _settings.VisibleTabs(), _slide == 1 ? _agents?.Activities ?? Array.Empty<AgentActivity>() : Array.Empty<AgentActivity>(), _doNotDisturb);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -743,7 +748,7 @@ internal sealed partial class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = _settings.Detached && _testSlides == 127 && _testClipboardToggled && !_clipboardListening && _testFocusActions == 7 && _testAppearanceToggled && _settings.ShowBatteryPercent && _testSizeChanged && _settings.SizePreset == 1 && _testTabToggled && _settings.HiddenTabs.Count == 0 && _testTabMoved && _settings.TabOrder.SequenceEqual(Enumerable.Range(0, 7)) && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true } && task.Due == DateTime.Today.AddDays(1).AddHours(1).AddMinutes(15);
+            TaskTestSucceeded = _settings.Detached && _testSlides == 127 && _testDndToggled && !_doNotDisturb && _testClipboardToggled && !_clipboardListening && _testFocusActions == 7 && _testAppearanceToggled && _settings.ShowBatteryPercent && _testSizeChanged && _settings.SizePreset == 1 && _testTabToggled && _settings.HiddenTabs.Count == 0 && _testTabMoved && _settings.TabOrder.SequenceEqual(Enumerable.Range(0, 7)) && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true } && task.Due == DateTime.Today.AddDays(1).AddHours(1).AddMinutes(15);
         }
         else SaveTasks();
         CloseComposer();
@@ -784,10 +789,35 @@ internal sealed partial class IslandApp : IDisposable
     {
         lock (_notificationQueue)
         {
+            if (!ShouldShowPreview(_doNotDisturb, preview)) return;
             if (_notificationQueue.Count >= 10) _notificationQueue.Dequeue();
             _notificationQueue.Enqueue(preview);
         }
         PostMessage(_hwnd, PreviewMessage, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    internal static bool ShouldShowPreview(bool doNotDisturb, NotificationPreview preview) => !doNotDisturb || !preview.IsAppNotification;
+
+    private void ToggleDnd()
+    {
+        bool enabled = !_doNotDisturb;
+        _settings.DoNotDisturb = enabled;
+        try { _settings.Save(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        { _settings.DoNotDisturb = !enabled; ShowPrompt("Do not disturb", "Could not save the setting."); return; }
+        lock (_notificationQueue)
+        {
+            _doNotDisturb = enabled;
+            if (enabled)
+            {
+                var keep = _notificationQueue.Where(item => !item.IsAppNotification).ToArray();
+                _notificationQueue.Clear();
+                foreach (var item in keep) _notificationQueue.Enqueue(item);
+            }
+        }
+        if (_taskTest && enabled) _testDndToggled = true;
+        if (enabled && _preview?.IsAppNotification == true) ShowNextNotification();
+        _dirty = true;
     }
 
     private void ShowNextNotification()

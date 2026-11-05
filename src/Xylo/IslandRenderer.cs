@@ -14,7 +14,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, IReadOnlyList<NotificationPreview> notifications, bool notificationsEnabled, bool clipboardEnabled, IReadOnlyList<string> clipboardItems, bool showBatteryPercent, IReadOnlyList<int> visibleTabs, IReadOnlyList<AgentActivity> agents)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, IReadOnlyList<NotificationPreview> notifications, bool notificationsEnabled, bool clipboardEnabled, IReadOnlyList<string> clipboardItems, bool showBatteryPercent, IReadOnlyList<int> visibleTabs, IReadOnlyList<AgentActivity> agents, bool doNotDisturb)
     {
         if (media == null && _artData != null) { _artwork?.Dispose(); _artwork = null; _artData = null; }
         canvas.Clear(SKColors.Transparent);
@@ -111,13 +111,14 @@ internal sealed class IslandRenderer : IDisposable
             _paint.Style = SKPaintStyle.Fill;
             if (showBatteryPercent) CenterText(canvas, $"{percent}%", centerX, 23.5f, percent >= 100 ? 6.5f : 7.5f, SKColors.White);
         }
-        if (unreadCount > 0 && height < 100 && preview == null && approval == null && notice == null)
-            DrawBell(canvas, right - (battery.Percent.HasValue ? 50 : 24), 21);
+        if ((doNotDisturb || unreadCount > 0) && height < 100 && preview == null && approval == null && notice == null)
+            DrawBell(canvas, right - (battery.Percent.HasValue ? 50 : 24), 21, doNotDisturb);
 
         if (height > 200 && panel == null && composer == null && review == null && prompt == null && approval == null)
         {
             _paint.Color = new SKColor(180, 190, 195);
             for (int i = 0; i < 3; i++) canvas.DrawCircle(right - 91 + i * 6, 21, 1.7f, _paint);
+            DrawBell(canvas, right - 58, 21, doNotDisturb);
         }
 
         if (approval == null && notice == null && preview != null && height < 110 && height > 54)
@@ -248,9 +249,9 @@ internal sealed class IslandRenderer : IDisposable
                     _paint.Color = new SKColor(255, 255, 255, 25); _paint.StrokeWidth = 1;
                     canvas.DrawLine(left + 207, 96, left + 207, 212, _paint);
                     Text(canvas, "Notifications", left + 220, 108, 12, SKColors.White);
-                    if (notifications.Count == 0)
-                        Text(canvas, notificationsEnabled ? "All caught up" : "Notifications off", left + 220, 139, 11, new SKColor(160, 169, 179));
-                    for (int i = 0; i < Math.Min(3, notifications.Count); i++)
+                    if (doNotDisturb || notifications.Count == 0)
+                        Text(canvas, doNotDisturb ? "Do not disturb on" : notificationsEnabled ? "All caught up" : "Notifications off", left + 220, 139, 11, new SKColor(160, 169, 179));
+                    for (int i = 0; !doNotDisturb && i < Math.Min(3, notifications.Count); i++)
                     {
                         var item = notifications[i];
                         string source = NotificationService.SourceLabel(item);
@@ -552,12 +553,13 @@ internal sealed class IslandRenderer : IDisposable
         _paint.Style = SKPaintStyle.Fill;
     }
 
-    private void DrawBell(SKCanvas canvas, float x, float y)
+    private void DrawBell(SKCanvas canvas, float x, float y, bool crossed = false)
     {
         _paint.Color = new SKColor(160, 190, 185); _paint.Style = SKPaintStyle.Stroke; _paint.StrokeWidth = 1.4f;
         canvas.DrawArc(new SKRect(x - 5, y - 6, x + 5, y + 5), 180, 180, false, _paint);
         canvas.DrawLine(x - 5, y, x - 5, y + 4, _paint); canvas.DrawLine(x + 5, y, x + 5, y + 4, _paint);
         canvas.DrawLine(x - 6, y + 4, x + 6, y + 4, _paint);
+        if (crossed) { _paint.Color = new SKColor(255, 168, 150); _paint.StrokeWidth = 2; canvas.DrawLine(x - 7, y - 7, x + 7, y + 7, _paint); }
         _paint.Style = SKPaintStyle.Fill; canvas.DrawCircle(x, y + 6, 1, _paint);
     }
 

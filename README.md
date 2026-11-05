@@ -28,6 +28,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Optional clipboard history in the notch controls: enable explicitly, then select a recent text item to copy it. History holds up to 20 entries in memory and is cleared on exit or when disabled. Clipboard entries may contain sensitive information.
 - Optional Windows notification previews can be enabled from the notch controls after granting Windows access. Availability depends on Windows permission and package identity; previews mirror content supplied by the originating app and may contain sensitive information.
 - The Today view shows up to three current Windows notifications beside the clock; a bell appears in the compact notch when Windows reports notifications.
+- Click the bell while hovering to toggle Do Not Disturb. Windows app notifications are hidden in Xylo while enabled; agent requests, focus and system activity continue. Windows notification settings are unchanged.
 - Focus, short break and long break timers, with pause/resume controls inside the notch.
 - Optional weather in the notch. Enabling it sends your IP to ipwho.is to estimate location and sends approximate coordinates to Open-Meteo; no requests are made until enabled.
 - Local task list with an editor inside the notch, completion, deletion, and optional due date and time.

@@ -37,6 +37,9 @@ try:
         time.sleep(0.3)
     for x in (69, 119, 169, 219, 269, 319, 369):
         click(x, 60)
+    width = u.SendMessageW(hwnd, 0x8019, 0, 0)
+    click(width - 38, 21) # Turn on Do Not Disturb from the bell
+    click(width - 38, 21) # Turn it off
     click(319, 60)  # Clipboard
     click(90, 195)  # Enable history
     click(90, 195)  # Disable and clear history

@@ -43,7 +43,7 @@ internal static class SelfTest
             renderer.Draw(canvas, 1, 400, 236, false, new BatteryStatus(null, false, null), seconds, -1,
                 null, null, false, new FocusTimer(), null, 0, agent, null, null, Array.Empty<TaskItem>(), 1,
                 null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true,
-                Enumerable.Range(0, 7).ToArray(), new[] { agent });
+                Enumerable.Range(0, 7).ToArray(), new[] { agent }, false);
             canvas.Flush();
         }
         Render(first, 0); Render(second, 0.7);
@@ -66,7 +66,7 @@ internal static class SelfTest
         renderer.Draw(canvas, 1, 660, 236, false, new BatteryStatus(null, false, null), 0, -1,
             media, new LyricsSnapshot("test", Array.Empty<LyricLine>(), "one\ntwo", "missing"), true,
             new FocusTimer(), null, 0, null, null, null, Array.Empty<TaskItem>(), 4,
-            null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true, Enumerable.Range(0, 7).ToArray(), Array.Empty<AgentActivity>());
+            null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true, Enumerable.Range(0, 7).ToArray(), Array.Empty<AgentActivity>(), false);
         canvas.Flush();
         var pixel = bitmap.GetPixel(89, 139);
         return pixel.Red > 180 && pixel.Green < 60;
@@ -151,6 +151,9 @@ internal static class SelfTest
             && wifiConnected?.Title == "Wi-Fi connected" && wifiSame == null && muted.Title == "Muted" && muted.Progress == 0
             && VolumeHudService.Preview(0.7f, false, 0.5f).Title == "Volume up" && VolumeHudService.Preview(0.4f, false, 0.5f).Title == "Volume down"
             && NotificationService.CreatePreview("WhatsApp", "Incoming call", "Alice").Kind == "whatsapp-call"
+            && NotificationService.CreatePreview("WhatsApp", "Akhyar", "Hi").IsAppNotification && !plugged!.IsAppNotification
+            && !IslandApp.ShouldShowPreview(true, NotificationService.CreatePreview("WhatsApp", "Akhyar", "Hi"))
+            && IslandApp.ShouldShowPreview(true, plugged) && IslandApp.ShouldShowPreview(false, NotificationService.CreatePreview("WhatsApp", "Akhyar", "Hi"))
             && NotificationService.SourceLabel(NotificationService.CreatePreview("WhatsApp", "Akhyar", "Halo")) == "WhatsApp / Akhyar"
             && NotificationService.SourceLabel(NotificationService.CreatePreview("WhatsApp", "Group A", "Halo")) == "WhatsApp / Group A"
             && NotificationService.SourceLabel(NotificationService.CreatePreview("Chrome", "Group A", "Hello")) == "Chrome / Group A"

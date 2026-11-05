@@ -3,7 +3,7 @@ using Windows.UI.Notifications.Management;
 
 namespace Xylo;
 
-internal sealed record NotificationPreview(string App, string Title, string Body, float? Progress = null, bool IsHud = false, string HudSource = "", string Kind = "");
+internal sealed record NotificationPreview(string App, string Title, string Body, float? Progress = null, bool IsHud = false, string HudSource = "", string Kind = "", bool IsAppNotification = false);
 
 internal sealed class NotificationService : IDisposable
 {
@@ -157,7 +157,7 @@ internal sealed class NotificationService : IDisposable
     {
         bool whatsapp = app.Contains("whatsapp", StringComparison.OrdinalIgnoreCase) || title.Contains("web.whatsapp.com", StringComparison.OrdinalIgnoreCase);
         bool call = whatsapp && new[] { "incoming call", "calling", "panggilan", "video call", "voice call" }.Any(word => title.Contains(word, StringComparison.OrdinalIgnoreCase) || body.Contains(word, StringComparison.OrdinalIgnoreCase));
-        return new NotificationPreview(Short(app, 100), Short(string.IsNullOrEmpty(title) ? app : title, 200), Short(body, 500), Kind: call ? "whatsapp-call" : whatsapp ? "whatsapp" : "notification");
+        return new NotificationPreview(Short(app, 100), Short(string.IsNullOrEmpty(title) ? app : title, 200), Short(body, 500), Kind: call ? "whatsapp-call" : whatsapp ? "whatsapp" : "notification", IsAppNotification: true);
     }
     internal static string SourceLabel(NotificationPreview item)
     {

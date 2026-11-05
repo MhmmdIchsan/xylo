@@ -24,6 +24,7 @@ internal sealed class Settings
     public bool LyricsEnabled { get; set; } = true;
     public int DashboardSlide { get; set; }
     public bool ShowBatteryPercent { get; set; } = true;
+    public bool DoNotDisturb { get; set; }
     public int SizePreset { get; set; } = 1;
     public int MonitorIndex { get; set; }
     public List<int> TabOrder { get; set; } = Enumerable.Range(0, 7).ToList();
