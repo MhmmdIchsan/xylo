@@ -1,6 +1,7 @@
 """Integration test for a synthetic approval; Xylo must already be running."""
 import ctypes
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -30,6 +31,14 @@ if not window:
     raise SystemExit("Start Xylo before running the bridge integration test")
 time.sleep(1)  # The window can appear before the agent pipe starts listening.
 
+def notch_scale():
+    settings_path = pathlib.Path(os.environ["APPDATA"]) / "Xylo" / "settings.json"
+    try:
+        preset = json.loads(settings_path.read_text(encoding="utf-8-sig")).get("SizePreset", 1)
+    except (OSError, ValueError):
+        preset = 1
+    return user32.GetDpiForWindow(ctypes.c_void_p(window)) / 96 * {0: 0.9, 1: 1.0, 2: 1.1}.get(preset, 1.0)
+
 for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
     command = [sys.executable, str(hook)] + (["PreToolUse"] if agent == "antigravity" else [])
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -39,11 +48,16 @@ for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
     time.sleep(0.5)
     user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, 0)
     time.sleep(1)
-    scale = user32.GetDpiForWindow(ctypes.c_void_p(window)) / 96
+    scale = notch_scale()
     x = int(({6: 336, 7: 210, 2: 94}[choice] + 130) * scale)
     y = int(373 * scale)
     user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, x | (y << 16))
-    process.wait(timeout=5)
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        raise
     output = process.stdout.read()
     if agent == "antigravity":
         actual = json.loads(output)["decision"]
@@ -68,7 +82,7 @@ if agent == "codex":
         time.sleep(0.5)
         user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, 0)
         time.sleep(1)
-        scale = user32.GetDpiForWindow(ctypes.c_void_p(window)) / 96
+        scale = notch_scale()
         def click(x, y):
             user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, int((x + 130) * scale) | (int(y * scale) << 16))
             time.sleep(0.05)
