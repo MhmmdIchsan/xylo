@@ -2,6 +2,13 @@ namespace Xylo;
 
 internal static class SelfTest
 {
+    public static int RunConnectivity()
+    {
+        using var service = new ConnectivityService(_ => { });
+        service.Start();
+        return service.NetworkMonitoring || service.BluetoothMonitoring ? 0 : 1;
+    }
+
     public static int RunWeather()
     {
         try
@@ -40,6 +47,8 @@ internal static class SelfTest
         var lowBattery = BatteryStatus.Alert(new BatteryStatus(21, false, false), new BatteryStatus(20, false, false));
         var plugged = BatteryStatus.Alert(new BatteryStatus(40, false, false), new BatteryStatus(40, true, true));
         var unknownPower = BatteryStatus.Alert(new BatteryStatus(40, false, null), new BatteryStatus(40, true, true));
+        var wifiConnected = ConnectivityService.WifiAlert(new WifiState(false, ""), new WifiState(true, "test network"));
+        var wifiSame = ConnectivityService.WifiAlert(new WifiState(true, "test network"), new WifiState(true, "test network"));
         bool staysLocked = !review.CanApprove;
         review.Next();
         bool valid = lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
@@ -49,7 +58,8 @@ internal static class SelfTest
             && !timer.Running && timer.Remaining is >= 59 and <= 60 && rejectsInvalidDate
             && task is { Title: "new task", Done: true, HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 }
             && startsLocked && staysLocked && review.CanApprove && ApprovalReview.SafeDisplay("a\u202Eb\t") == "a\\u202Eb\\u0009"
-            && lowBattery?.Title == "Battery low" && plugged?.Title == "Power connected" && unknownPower == null;
+            && lowBattery?.Title == "Battery low" && plugged?.Title == "Power connected" && unknownPower == null
+            && wifiConnected?.Title == "Wi-Fi connected" && wifiSame == null;
         return valid ? 0 : 1;
     }
 }

@@ -12,6 +12,7 @@ internal sealed partial class IslandApp
     private PanelView? _panelView;
     private bool _testPanelPagination;
     private bool _testWeatherToggled;
+    private bool _testConnectivityToggled;
 
     private void ShowMenu()
     {
@@ -75,6 +76,7 @@ internal sealed partial class IslandApp
                     catch (Exception error) when (error is IOException or UnauthorizedAccessException)
                     { _settings.BatteryAlertsEnabled = previous; ShowPrompt("Battery", "Could not save the alert setting."); }
                 }));
+                rows.Add(new(_settings.ConnectivityAlertsEnabled ? "Connectivity alerts: On" : "Connectivity alerts: Off", ToggleConnectivity));
                 rows.Add(new("Quit Xylo", () => DestroyWindow(_hwnd)));
                 break;
             case PanelPage.Tasks:
@@ -242,5 +244,34 @@ internal sealed partial class IslandApp
         _weather?.Dispose();
         _weather = new WeatherService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
         _weather.Start();
+    }
+
+    private void ToggleConnectivity()
+    {
+        bool enabled = !_settings.ConnectivityAlertsEnabled;
+        if (_taskTest && enabled) _testConnectivityToggled = true;
+        _settings.ConnectivityAlertsEnabled = enabled;
+        try { _settings.Save(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _settings.ConnectivityAlertsEnabled = !enabled;
+            ShowPrompt("Connectivity", "Could not save the alert setting.");
+            return;
+        }
+        if (enabled) StartConnectivity();
+        else { _connectivity?.Dispose(); _connectivity = null; }
+        InvalidatePanel();
+    }
+
+    private void StartConnectivity()
+    {
+        _connectivity?.Dispose();
+        ConnectivityService? service = null;
+        service = new ConnectivityService(preview =>
+        {
+            if (ReferenceEquals(_connectivity, service) && _settings.ConnectivityAlertsEnabled) EnqueueNotification(preview);
+        });
+        _connectivity = service;
+        service.Start();
     }
 }

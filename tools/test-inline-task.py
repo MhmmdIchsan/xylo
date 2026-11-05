@@ -30,6 +30,8 @@ try:
     click(350, 260) # Confirm inside Xylo
     time.sleep(0.8)
     click(70, 95)   # Disable again, using transient test settings
+    click(70, 171)  # Enable connectivity alerts
+    click(70, 171)  # Disable again
     click(160, 345) # Return to first page
     click(70, 95)   # Toggle position without changing the user's settings
     click(70, 247)  # Controls -> Tasks

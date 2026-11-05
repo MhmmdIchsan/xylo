@@ -41,6 +41,7 @@ internal sealed partial class IslandApp : IDisposable
     private AgentBridge? _agents;
     private NotificationService? _notifications;
     private WeatherService? _weather;
+    private ConnectivityService? _connectivity;
     private readonly Queue<NotificationPreview> _notificationQueue = new();
     private NotificationPreview? _preview;
     private bool _notificationPrompt;
@@ -90,6 +91,7 @@ internal sealed partial class IslandApp : IDisposable
             _media = new MediaService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _media.Start();
             if (_settings.WeatherEnabled) StartWeather();
+            if (_settings.ConnectivityAlertsEnabled) StartConnectivity();
         }
         RefreshBattery();
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BatteryTimer, 60000, IntPtr.Zero);
@@ -583,7 +585,7 @@ internal sealed partial class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = _settings.Detached && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
+            TaskTestSucceeded = _settings.Detached && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
         }
         else SaveTasks();
         CloseComposer();
@@ -675,6 +677,7 @@ internal sealed partial class IslandApp : IDisposable
         _agents?.Dispose();
         _notifications?.Dispose();
         _weather?.Dispose();
+        _connectivity?.Dispose();
         if (_clipboardListening) RemoveClipboardFormatListener(_hwnd);
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);
