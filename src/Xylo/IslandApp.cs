@@ -7,7 +7,7 @@ using static Xylo.Native;
 
 namespace Xylo;
 
-internal sealed class IslandApp : IDisposable
+internal sealed partial class IslandApp : IDisposable
 {
     public const float CanvasWidth = 440;
     private const float CanvasHeight = 420;
@@ -56,7 +56,7 @@ internal sealed class IslandApp : IDisposable
     {
         _smokeTest = smokeTest;
         _taskTest = taskTest;
-        _settings = smokeTest || taskTest ? new Settings() : Settings.Load();
+        _settings = smokeTest || taskTest ? new Settings { Transient = true } : Settings.Load();
         _windowProcedure = WindowProcedure;
     }
 
@@ -97,7 +97,7 @@ internal sealed class IslandApp : IDisposable
         AddTrayIcon();
         // Ctrl + Alt + X, with MOD_NOREPEAT. A collision does not prevent startup.
         _hotkeyRegistered = RegisterHotKey(_hwnd, 1, 0x4003, 0x58);
-        if (_taskTest) BeginComposer(null);
+        if (_taskTest) ShowMenu();
         if (_smokeTest && SetTimer(_hwnd, (UIntPtr)SmokeTimer, 500, IntPtr.Zero) == UIntPtr.Zero)
             throw new Win32Exception();
 
@@ -138,7 +138,7 @@ internal sealed class IslandApp : IDisposable
     private void SetExpanded(bool expanded)
     {
         KillTimer(_hwnd, (UIntPtr)CollapseTimer);
-        if (!expanded && (_composer != null || _review != null || _prompt != null)) return;
+        if (!expanded && (_composer != null || _review != null || _prompt != null || _panel != null)) return;
         if (_expanded == expanded) return;
         _expanded = expanded;
         UpdateTarget();
@@ -147,8 +147,8 @@ internal sealed class IslandApp : IDisposable
     private void UpdateTarget()
     {
         bool needsDetail = _media?.Snapshot != null || _agents?.Pending != null || _agents?.Notice != null || _preview != null;
-        double targetWidth = _prompt != null || _review != null || _composer != null || _expanded ? 400 : (needsDetail ? 400 : _agents?.Activity != null ? 260 : 180);
-        double targetHeight = _prompt != null ? 300 : _review != null ? 400 : _composer != null ? 300 : _expanded ? 236 : (needsDetail ? 68 : 42);
+        double targetWidth = _prompt != null || _review != null || _composer != null || _panel != null || _expanded ? 400 : (needsDetail ? 400 : _agents?.Activity != null ? 260 : 180);
+        double targetHeight = _prompt != null ? 300 : _review != null ? 400 : _composer != null ? 300 : _panel != null ? 380 : _expanded ? 236 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
         _width.Target = targetWidth;
         _height.Target = targetHeight;
@@ -232,7 +232,21 @@ internal sealed class IslandApp : IDisposable
                     _dirty = true;
                     return IntPtr.Zero;
                 }
+                if (_panel != null)
+                {
+                    float px = (short)(lParam.ToInt64() & 0xffff) / _scale - (CanvasWidth - (float)_width.Value) / 2;
+                    float py = (short)((lParam.ToInt64() >> 16) & 0xffff) / _scale;
+                    HandlePanelClick(px, py);
+                    return IntPtr.Zero;
+                }
                 if (_agents?.Notice != null) return IntPtr.Zero;
+                if (_expanded)
+                {
+                    float px = (short)(lParam.ToInt64() & 0xffff) / _scale - (CanvasWidth - (float)_width.Value) / 2;
+                    float py = (short)((lParam.ToInt64() >> 16) & 0xffff) / _scale;
+                    if (px >= _width.Value - 104 && px <= _width.Value - 68 && py is >= 4 and <= 40)
+                    { ShowMenu(); return IntPtr.Zero; }
+                }
                 if (_preview != null) return IntPtr.Zero;
                 if (_expanded && _media?.Snapshot != null)
                 {
@@ -249,6 +263,7 @@ internal sealed class IslandApp : IDisposable
                 return IntPtr.Zero;
             case WM_APP_UPDATE:
                 _lyrics?.Update(_media?.Snapshot);
+                if (_agents?.Pending != null && _panel != null) { _panel = null; _panelView = null; _menuOpen = false; }
                 if (_review != null && !ReferenceEquals(_agents?.Pending, _review.Request)) _review = null;
                 if (_agents?.Notice != null) SetTimer(hwnd, (UIntPtr)NoticeTimer, 5000, IntPtr.Zero);
                 else KillTimer(hwnd, (UIntPtr)NoticeTimer);
@@ -269,10 +284,12 @@ internal sealed class IslandApp : IDisposable
                         try { _settings.Save(); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
                     }
                     _notificationPrompt = false;
+                    if (_panel == PanelPage.Home) InvalidatePanel();
                 }
                 return IntPtr.Zero;
             case 0x031D: // WM_CLIPBOARDUPDATE
                 if (_clipboardListening) _clipboard.Capture(hwnd);
+                if (_panel == PanelPage.Clipboard) InvalidatePanel();
                 return IntPtr.Zero;
             case 0x0312: // WM_HOTKEY
                 Toggle();
@@ -282,6 +299,7 @@ internal sealed class IslandApp : IDisposable
                 ShowMenu();
                 return IntPtr.Zero;
             case WM_MOUSEWHEEL:
+                if (_prompt != null || _composer != null) return IntPtr.Zero;
                 if (_review != null)
                 {
                     int delta = (short)((wParam.ToInt64() >> 16) & 0xffff);
@@ -289,10 +307,17 @@ internal sealed class IslandApp : IDisposable
                     _dirty = true;
                     return IntPtr.Zero;
                 }
+                if (_panel != null)
+                {
+                    int delta = (short)((wParam.ToInt64() >> 16) & 0xffff);
+                    if (delta < 0) _panelPage++; else if (delta > 0) _panelPage = Math.Max(0, _panelPage - 1);
+                    InvalidatePanel();
+                    return IntPtr.Zero;
+                }
                 break;
             case WM_TRAYICON:
                 if ((uint)lParam.ToInt64() == WM_RBUTTONUP) ShowMenu();
-                else if ((uint)lParam.ToInt64() == WM_LBUTTONUP) Toggle();
+                else if ((uint)lParam.ToInt64() == WM_LBUTTONUP) { if (_panel != null) ClosePanel(); else Toggle(); }
                 return IntPtr.Zero;
             case 0x0113: // WM_TIMER
                 if (wParam.ToInt64() == CollapseTimer)
@@ -322,6 +347,7 @@ internal sealed class IslandApp : IDisposable
                 else if (wParam.ToInt64() == FocusTickTimer)
                 {
                     if (_focus.Tick()) KillTimer(hwnd, (UIntPtr)FocusTickTimer);
+                    if (_panel == PanelPage.Focus) InvalidatePanel();
                     _dirty = true;
                 }
                 else if (wParam.ToInt64() == PreviewTimer)
@@ -419,7 +445,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done), _composer, _review, _prompt);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done), _composer, _review, _prompt, BuildPanelView());
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -449,138 +475,6 @@ internal sealed class IslandApp : IDisposable
             szInfo = "", szInfoTitle = ""
         };
         _trayAdded = Shell_NotifyIcon(NIM_ADD, ref _tray);
-    }
-
-    private void ShowMenu()
-    {
-        IntPtr foreground = GetForegroundWindow();
-        if (foreground != IntPtr.Zero && foreground != _hwnd) _previousForeground = foreground;
-        _menuOpen = true;
-        KillTimer(_hwnd, (UIntPtr)CollapseTimer);
-        IntPtr menu = CreatePopupMenu();
-        try
-        {
-            AppendMenu(menu, MF_STRING, (UIntPtr)1, _expanded ? "Collapse Xylo" : "Expand Xylo");
-            AppendMenu(menu, MF_STRING, (UIntPtr)3, _settings.Detached ? "Configuration: Attach to top" : "Configuration: Float below top");
-            AppendMenu(menu, MF_STRING, (UIntPtr)4, _clipboardListening ? "Disable clipboard history" : "Enable clipboard history");
-            AppendMenu(menu, MF_STRING, (UIntPtr)11, _notifications?.Active == true ? "Disable notification previews" : "Enable notification previews");
-            AppendMenu(menu, MF_STRING, (UIntPtr)16, "Add task…");
-            if (_settings.Tasks.Count > 0)
-            {
-                IntPtr tasksMenu = CreatePopupMenu();
-                for (int i = 0; i < _settings.Tasks.Count; i++)
-                {
-                    var task = _settings.Tasks[i];
-                    IntPtr taskMenu = CreatePopupMenu();
-                    AppendMenu(taskMenu, MF_STRING, (UIntPtr)(200 + i), task.Done ? "Mark open" : "Mark done");
-                    AppendMenu(taskMenu, MF_STRING, (UIntPtr)(300 + i), "Edit…");
-                    AppendMenu(taskMenu, MF_STRING, (UIntPtr)(400 + i), "Delete…");
-                    string label = (task.Done ? "[done] " : "[ ] ") + task.Title.Replace("&", "&&").Replace('\t', ' ');
-                    if (label.Length > 50) label = label[..50] + "…";
-                    if (task.Due is DateTime due) label += " (" + due.ToString(task.HasTime ? "yyyy-MM-dd HH:mm" : "yyyy-MM-dd") + ")";
-                    AppendMenu(tasksMenu, 0x10, new UIntPtr((ulong)taskMenu.ToInt64()), label);
-                }
-                AppendMenu(menu, 0x10, new UIntPtr((ulong)tasksMenu.ToInt64()), "Tasks");
-            }
-            AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, "");
-            AppendMenu(menu, MF_STRING, (UIntPtr)6, "Start focus (25 min)");
-            AppendMenu(menu, MF_STRING, (UIntPtr)7, "Start break (5 min)");
-            AppendMenu(menu, MF_STRING, (UIntPtr)8, "Start long break (15 min)");
-            AppendMenu(menu, MF_STRING, (UIntPtr)9, _focus.Running ? "Pause timer" : "Resume timer");
-            AppendMenu(menu, MF_STRING, (UIntPtr)10, "Clear timer");
-            if (_clipboardListening && _clipboard.Items.Count > 0)
-            {
-                AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, "");
-                for (int i = 0; i < Math.Min(10, _clipboard.Items.Count); i++)
-                {
-                    string preview = _clipboard.Items[i].Replace('\r', ' ').Replace('\n', ' ').Replace("&", "&&");
-                    if (preview.Length > 55) preview = preview[..55] + "…";
-                    AppendMenu(menu, MF_STRING, (UIntPtr)(100 + i), preview);
-                }
-                AppendMenu(menu, MF_STRING, (UIntPtr)5, "Clear clipboard history");
-            }
-            AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, "");
-            AppendMenu(menu, MF_STRING, (UIntPtr)2, "Quit Xylo");
-            GetCursorPos(out var cursor);
-            SetForegroundWindow(_hwnd);
-            uint command = TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD,
-                cursor.X, cursor.Y, 0, _hwnd, IntPtr.Zero);
-            if (command == 1) Toggle();
-            else if (command == 2) DestroyWindow(_hwnd);
-            else if (command == 3)
-            {
-                bool previous = _settings.Detached;
-                _settings.Detached = !previous;
-                try { _settings.Save(); }
-                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-                {
-                    _settings.Detached = previous;
-                    ShowPrompt("Configuration", "Could not save Xylo configuration.");
-                }
-                _y = _settings.Detached ? (int)(12 * _scale) : 0;
-                _dirty = true;
-            }
-            else if (command == 4) ToggleClipboard();
-            else if (command == 5) _clipboard.Clear();
-            else if (command == 6) StartFocus("Focus", 25 * 60);
-            else if (command == 7) StartFocus("Break", 5 * 60);
-            else if (command == 8) StartFocus("Long break", 15 * 60);
-            else if (command == 9)
-            {
-                _focus.Toggle();
-                if (_focus.Running) SetTimer(_hwnd, (UIntPtr)FocusTickTimer, 1000, IntPtr.Zero);
-                else KillTimer(_hwnd, (UIntPtr)FocusTickTimer);
-                _dirty = true;
-            }
-            else if (command == 10) { _focus.Clear(); KillTimer(_hwnd, (UIntPtr)FocusTickTimer); _dirty = true; }
-            else if (command == 11 && _notifications is not null && !_notifications.Requesting)
-            {
-                if (_notifications.Active)
-                {
-                    _notifications.Stop();
-                    _settings.NotificationsEnabled = false;
-                    try { _settings.Save(); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
-                    lock (_notificationQueue) _notificationQueue.Clear();
-                    _preview = null;
-                    KillTimer(_hwnd, (UIntPtr)PreviewTimer);
-                    UpdateTarget();
-                    _dirty = true;
-                }
-                else { _notificationPrompt = true; _notifications.Start(true); }
-            }
-            else if (command == 16)
-            {
-                if (_settings.Tasks.Count >= 30) ShowPrompt("Tasks", "Xylo supports up to 30 tasks.");
-                else BeginComposer(null);
-            }
-            else if (command >= 200 && command < 230 && command - 200 < _settings.Tasks.Count)
-            {
-                var task = _settings.Tasks[(int)command - 200];
-                task.Done = !task.Done;
-                SaveTasks();
-            }
-            else if (command >= 300 && command < 330 && command - 300 < _settings.Tasks.Count)
-            {
-                int index = (int)command - 300;
-                BeginComposer(index);
-            }
-            else if (command >= 400 && command < 430 && command - 400 < _settings.Tasks.Count)
-            {
-                var task = _settings.Tasks[(int)command - 400];
-                ShowPrompt("Delete task?", task.Title, "Delete", () => { if (_settings.Tasks.Remove(task)) SaveTasks(); });
-            }
-            else if (command >= 100 && command < 110 && !_clipboard.Copy(_hwnd, (int)command - 100))
-                ShowPrompt("Clipboard", "Could not copy the selected item.");
-            PostMessage(_hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
-        }
-        finally
-        {
-            DestroyMenu(menu);
-            _menuOpen = false;
-            GetCursorPos(out var cursor);
-            if (!IsInsidePill((cursor.X - _x) / _scale, (cursor.Y - _y) / _scale))
-                SetTimer(_hwnd, (UIntPtr)CollapseTimer, 180, IntPtr.Zero);
-        }
     }
 
     private void ToggleClipboard()
@@ -640,7 +534,7 @@ internal sealed class IslandApp : IDisposable
         var prompt = _prompt;
         _prompt = null;
         if (confirmed) prompt?.Confirm?.Invoke();
-        if (_prompt == null && _composer == null && _review == null)
+        if (_prompt == null && _composer == null && _review == null && _panel == null)
         {
             GetCursorPos(out var cursor);
             _expanded = IsInsidePill((cursor.X - _x) / _scale, (cursor.Y - _y) / _scale);
@@ -682,7 +576,7 @@ internal sealed class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
+            TaskTestSucceeded = _settings.Detached && _testPanelPagination && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
         }
         else SaveTasks();
         CloseComposer();

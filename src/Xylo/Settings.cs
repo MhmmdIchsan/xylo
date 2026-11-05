@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Xylo;
 
@@ -16,6 +17,8 @@ internal sealed class Settings
     public bool ClipboardEnabled { get; set; }
     public bool NotificationsEnabled { get; set; }
     public List<TaskItem> Tasks { get; set; } = new();
+    [JsonIgnore]
+    internal bool Transient { get; set; }
     private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Xylo", "settings.json");
 
     public static Settings Load()
@@ -34,6 +37,7 @@ internal sealed class Settings
 
     public void Save()
     {
+        if (Transient) return;
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         string temporary = FilePath + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));

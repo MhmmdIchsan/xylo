@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -64,6 +64,8 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, "Review request", left + 52, 26, 12, SKColors.White);
         else if (composer != null)
             Text(canvas, composer.EditIndex == null ? "New task" : "Edit task", left + 52, 26, 12, SKColors.White);
+        else if (panel != null)
+            Text(canvas, "Controls", left + 52, 26, 12, SKColors.White);
         else if (approval != null)
             Text(canvas, approval.Agent + " needs approval", left + 52, 26, 12, new SKColor(255, 185, 100));
         else if (notice != null)
@@ -71,7 +73,7 @@ internal sealed class IslandRenderer : IDisposable
         else if (preview != null)
             Text(canvas, Truncate(preview.Title, Math.Max(0, width - 135), 12), left + 52, 26, 12, SKColors.White);
         else if (media != null)
-            Text(canvas, Truncate(media.Title, Math.Max(0, width - 135), 12), left + 52, 26, 12, new SKColor(235, 240, 242));
+            Text(canvas, Truncate(media.Title, Math.Max(0, width - 155), 12), left + 52, 26, 12, new SKColor(235, 240, 242));
         else if (agent != null && !focus.Active)
             Text(canvas, Truncate(agent.Agent + (agent.Working ? " working" : " finished"), width - 125, 11), left + 52, 26, 11, new SKColor(130, 230, 190));
         if (battery.Percent is int percent)
@@ -94,10 +96,16 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, $"{percent}%", centerX - 39, 26, 11, new SKColor(200, 209, 213));
             if (battery.Charging) Text(canvas, "+", centerX - 3.5f, 25, 11, SKColors.White);
         }
-        else if (media == null && !focus.Active && agent == null) Text(canvas, "Ready", right - 58, 29, 12, new SKColor(160, 169, 179));
+        else if (media == null && !focus.Active && agent == null && panel == null && composer == null && review == null && prompt == null && approval == null && notice == null && preview == null) Text(canvas, "Ready", right - 58, 29, 12, new SKColor(160, 169, 179));
 
-        if (media == null && focus.Active)
+        if (media == null && focus.Active && panel == null && composer == null && review == null && prompt == null && approval == null && notice == null && preview == null)
             Text(canvas, Truncate(focus.Display, width - 120, 12), left + 52, 26, 12, new SKColor(130, 230, 190));
+
+        if (height > 200 && panel == null && composer == null && review == null && prompt == null && approval == null)
+        {
+            _paint.Color = new SKColor(180, 190, 195);
+            for (int i = 0; i < 3; i++) canvas.DrawCircle(right - 91 + i * 6, 21, 1.7f, _paint);
+        }
 
         if (approval != null && height < 110 && height > 54)
             Text(canvas, Truncate($"{approval.Tool} · click to review ({pendingCount})", width - 48, 12), left + 24, 52, 12, new SKColor(255, 185, 100));
@@ -151,6 +159,21 @@ internal sealed class IslandRenderer : IDisposable
                 DrawButton(canvas, left + 202, 240, 76, 42, "Cancel", false);
                 DrawButton(canvas, left + 286, 240, 90, 42, "Save", true);
             }
+            else if (panel != null)
+            {
+                Text(canvas, Truncate(panel.Title, 352, 16), left + 24, 69, 16, SKColors.White);
+                for (int i = 0; i < panel.Rows.Count; i++)
+                {
+                    float rowY = 78 + i * 38;
+                    _paint.Color = new SKColor(255, 255, 255, 13);
+                    canvas.DrawRoundRect(new SKRect(left + 24, rowY, left + 376, rowY + 34), 8, 8, _paint);
+                    Text(canvas, Truncate(panel.Rows[i], 328, 12), left + 36, rowY + 22, 12, new SKColor(235, 240, 240));
+                }
+                DrawButton(canvas, left + 24, 325, 76, 40, "Back", false, panel.CanGoBack);
+                DrawButton(canvas, left + 108, 325, 66, 40, "Prev", false, panel.Page > 0);
+                DrawButton(canvas, left + 180, 325, 66, 40, "Next", false, panel.Page + 1 < panel.PageCount);
+                DrawButton(canvas, left + 260, 325, 116, 40, "Close", true);
+            }
             else if (approval != null)
             {
                 Text(canvas, approval.Agent + " needs your approval", left + 24, 72, 16, SKColors.White);
@@ -175,7 +198,7 @@ internal sealed class IslandRenderer : IDisposable
             else if (media == null)
             {
             Text(canvas, "Your workspace, at a glance.", left + 24, 72, 17, SKColors.White);
-            Text(canvas, "Desktop foundation is running.", left + 24, 97, 13, new SKColor(160, 169, 179));
+            Text(canvas, "Your controls are ready.", left + 24, 97, 13, new SKColor(160, 169, 179));
             _paint.Color = new SKColor(255, 255, 255, 18);
             canvas.DrawLine(left + 24, 114, left + width - 24, 114, _paint);
             Text(canvas, "Focus timer", left + 24, 140, 13, SKColors.White);

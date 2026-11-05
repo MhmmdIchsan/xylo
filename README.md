@@ -13,16 +13,16 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Minimal animated eyes blink periodically without a continuously running animation loop.
 - Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.
 - Shows the current synchronized lyric line in the compact notch and upcoming lines when expanded. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.
-- Optional clipboard history in the right-click menu: enable explicitly, then select a recent text item to copy it. History holds up to 20 entries in memory and is cleared on exit or when disabled. Clipboard entries may contain sensitive information.
-- Optional Windows notification previews can be enabled from the right-click menu after granting Windows access. Availability depends on Windows permission and package identity; previews mirror content supplied by the originating app and may contain sensitive information.
-- Focus, short break and long break timers, with pause/resume controls in the right-click menu.
+- Optional clipboard history in the notch controls: enable explicitly, then select a recent text item to copy it. History holds up to 20 entries in memory and is cleared on exit or when disabled. Clipboard entries may contain sensitive information.
+- Optional Windows notification previews can be enabled from the notch controls after granting Windows access. Availability depends on Windows permission and package identity; previews mirror content supplied by the originating app and may contain sensitive information.
+- Focus, short break and long break timers, with pause/resume controls inside the notch.
 - Local task list with an editor inside the notch, completion, deletion, and optional due date and time.
 - Optional [Codex](integrations/codex/README.md) and [Claude Code](integrations/claude/README.md) approval integrations, with an explicit in-notch review and safe fallback to the original agent prompt.
 - Optional [Cursor activity and shell review](integrations/cursor/README.md); shell review is a separately enabled policy that reviews each matching command.
 - Optional [OpenCode activity and approval notices](integrations/opencode/README.md); permission decisions are made in OpenCode.
 - Optional [Antigravity activity and tool review](integrations/antigravity/README.md); the tool-review policy applies to every matching call and has only been tested with synthetic hook inputs.
-- System tray menu to expand/collapse or quit.
-- Configuration in the right-click menu switches between an attached notch and a floating island; the choice is saved locally.
+- The system tray icon opens or collapses Xylo; right-click opens its controls inside the notch.
+- The controls switch between an attached notch and a floating island; the choice is saved locally.
 - `Ctrl+Alt+X` global toggle shortcut, when available.
 - DPI-aware rendering and surface recreation after display changes.
 - Single-instance startup and message-driven idle behavior: no continuous rendering when settled.
@@ -36,7 +36,7 @@ dotnet build src/Xylo/Xylo.csproj -c Release
 dotnet run --project src/Xylo/Xylo.csproj -c Release --no-build
 ```
 
-Right-click the notch or tray icon and choose **Quit Xylo** to exit. The notch currently uses the top center of the primary display. Multi-monitor selection and persistent settings are planned.
+Right-click the notch or tray icon, or click the three dots in the expanded notch, to open its controls. Use **Next** in Controls to reach **Quit Xylo**. The notch currently uses the top center of the primary display; multi-monitor selection is planned.
 
 Create a framework-dependent folder build (requires the .NET 8 x64 runtime on the target computer):
 

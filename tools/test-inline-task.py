@@ -19,12 +19,20 @@ try:
             break
         time.sleep(0.1)
     assert hwnd, "Notch did not open"
+    time.sleep(1)
+    scale = u.GetDpiForWindow(hwnd) / 96
+    def click(x, y):
+        u.SendMessageW(hwnd, 0x0202, 0, int(x * scale) | (int(y * scale) << 16))
+        time.sleep(0.3)
+    click(230, 345) # Controls -> next page
+    click(160, 345) # Return to first page
+    click(70, 95)   # Toggle position without changing the user's settings
+    click(70, 247)  # Controls -> Tasks
+    click(70, 95)   # Tasks -> Add task
     time.sleep(0.8)
     for char in "synthetic task":
         u.SendMessageW(hwnd, 0x0102, ord(char), 0)
-    scale = u.GetDpiForWindow(hwnd) / 96
-    x, y = int(70 * scale), int(150 * scale)
-    u.SendMessageW(hwnd, 0x0202, 0, x | (y << 16))
+    click(70, 150)
     for char in "invalid":
         u.SendMessageW(hwnd, 0x0102, ord(char), 0)
     u.SendMessageW(hwnd, 0x0100, 0x0D, 0)

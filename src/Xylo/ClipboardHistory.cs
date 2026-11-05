@@ -45,11 +45,15 @@ internal sealed class ClipboardHistory
 
     public bool Copy(IntPtr hwnd, int index)
     {
-        if (index < 0 || index >= _items.Count || !Native.OpenClipboard(hwnd)) return false;
+        return index >= 0 && index < _items.Count && CopyValue(hwnd, _items[index]);
+    }
+
+    public bool CopyValue(IntPtr hwnd, string value)
+    {
+        if (!_items.Contains(value) || !Native.OpenClipboard(hwnd)) return false;
         IntPtr memory = IntPtr.Zero;
         try
         {
-            string value = _items[index];
             memory = Native.GlobalAlloc(2, (nuint)((value.Length + 1) * 2));
             if (memory == IntPtr.Zero) return false;
             IntPtr ptr = Native.GlobalLock(memory);
