@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -141,7 +141,7 @@ internal sealed class IslandRenderer : IDisposable
             canvas.DrawLine(left + 24, 114, left + width - 24, 114, _paint);
             Text(canvas, "Focus timer", left + 24, 140, 13, SKColors.White);
             Text(canvas, focus.Active ? $"{focus.Label}: {focus.Display}" : "Start a timer from the right-click menu", left + 24, 161, 12, new SKColor(160, 169, 179));
-            if (agent != null) Text(canvas, agent.Agent + (agent.Working ? " working" : " finished"), left + 24, 181, 11, new SKColor(130, 230, 190));
+            Text(canvas, agent != null ? agent.Agent + (agent.Working ? " working" : " finished") : $"Tasks: {completedTasks}/{taskCount} done", left + 24, 181, 11, new SKColor(130, 230, 190));
             Text(canvas, "Hover to open · move away to close", left + 24, 198, 12, new SKColor(130, 230, 190));
             Text(canvas, "Right-click for menu", left + 24, 218, 11, new SKColor(160, 169, 179));
             }

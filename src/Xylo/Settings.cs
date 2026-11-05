@@ -2,16 +2,31 @@ using System.Text.Json;
 
 namespace Xylo;
 
+internal sealed class TaskItem
+{
+    public string Title { get; set; } = "";
+    public DateTime? Due { get; set; }
+    public bool HasTime { get; set; }
+    public bool Done { get; set; }
+}
+
 internal sealed class Settings
 {
     public bool Detached { get; set; }
     public bool ClipboardEnabled { get; set; }
     public bool NotificationsEnabled { get; set; }
+    public List<TaskItem> Tasks { get; set; } = new();
     private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Xylo", "settings.json");
 
     public static Settings Load()
     {
-        try { return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new(); }
+        try
+        {
+            var settings = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new();
+            settings.Tasks ??= new();
+            settings.Tasks = settings.Tasks.Where(item => item != null && !string.IsNullOrWhiteSpace(item.Title)).Take(30).ToList();
+            return settings;
+        }
         catch (IOException) { return new(); }
         catch (UnauthorizedAccessException) { return new(); }
         catch (JsonException) { return new(); }
@@ -20,6 +35,8 @@ internal sealed class Settings
     public void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        string temporary = FilePath + ".tmp";
+        File.WriteAllText(temporary, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        File.Move(temporary, FilePath, true);
     }
 }

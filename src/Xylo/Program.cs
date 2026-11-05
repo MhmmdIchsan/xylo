@@ -9,6 +9,11 @@ internal static class Program
     private static int Main(string[] args)
     {
         if (args.Contains("--self-test")) return SelfTest.Run();
+        if (args.Contains("--test-task-dialog"))
+        {
+            var result = TaskDialog.Edit(IntPtr.Zero, new TaskItem { Title = "old", Done = true });
+            return result is { Title: "synthetic task", Done: true, HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 } ? 0 : 1;
+        }
         using var instance = new Mutex(true, @"Local\Xylo.Desktop", out bool created);
         if (!created) return 0;
         try

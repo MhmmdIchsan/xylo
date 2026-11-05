@@ -40,5 +40,8 @@ internal static partial class Native
     public static extern uint GetGuiResources(IntPtr process, uint flags);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool IsDialogMessage(IntPtr hwnd, ref MSG message);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int MessageBox(IntPtr hwnd, string text, string caption, uint type);
 }

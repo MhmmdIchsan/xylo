@@ -346,7 +346,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done));
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -389,6 +389,24 @@ internal sealed class IslandApp : IDisposable
             AppendMenu(menu, MF_STRING, (UIntPtr)3, _settings.Detached ? "Configuration: Attach to top" : "Configuration: Float below top");
             AppendMenu(menu, MF_STRING, (UIntPtr)4, _clipboardListening ? "Disable clipboard history" : "Enable clipboard history");
             AppendMenu(menu, MF_STRING, (UIntPtr)11, _notifications?.Active == true ? "Disable notification previews" : "Enable notification previews");
+            AppendMenu(menu, MF_STRING, (UIntPtr)16, "Add task…");
+            if (_settings.Tasks.Count > 0)
+            {
+                IntPtr tasksMenu = CreatePopupMenu();
+                for (int i = 0; i < _settings.Tasks.Count; i++)
+                {
+                    var task = _settings.Tasks[i];
+                    IntPtr taskMenu = CreatePopupMenu();
+                    AppendMenu(taskMenu, MF_STRING, (UIntPtr)(200 + i), task.Done ? "Mark open" : "Mark done");
+                    AppendMenu(taskMenu, MF_STRING, (UIntPtr)(300 + i), "Edit…");
+                    AppendMenu(taskMenu, MF_STRING, (UIntPtr)(400 + i), "Delete…");
+                    string label = (task.Done ? "[done] " : "[ ] ") + task.Title.Replace("&", "&&").Replace('\t', ' ');
+                    if (label.Length > 50) label = label[..50] + "…";
+                    if (task.Due is DateTime due) label += " (" + due.ToString(task.HasTime ? "yyyy-MM-dd HH:mm" : "yyyy-MM-dd") + ")";
+                    AppendMenu(tasksMenu, 0x10, new UIntPtr((ulong)taskMenu.ToInt64()), label);
+                }
+                AppendMenu(menu, 0x10, new UIntPtr((ulong)tasksMenu.ToInt64()), "Tasks");
+            }
             AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, "");
             AppendMenu(menu, MF_STRING, (UIntPtr)6, "Start focus (25 min)");
             AppendMenu(menu, MF_STRING, (UIntPtr)7, "Start break (5 min)");
@@ -455,6 +473,28 @@ internal sealed class IslandApp : IDisposable
                 }
                 else { _notificationPrompt = true; _notifications.Start(true); }
             }
+            else if (command == 16)
+            {
+                if (_settings.Tasks.Count >= 30) MessageBox(_hwnd, "Xylo supports up to 30 tasks.", "Xylo tasks", 0x40);
+                else if (TaskDialog.Edit(_hwnd, null) is { } task) { _settings.Tasks.Add(task); SaveTasks(); }
+            }
+            else if (command >= 200 && command < 230 && command - 200 < _settings.Tasks.Count)
+            {
+                var task = _settings.Tasks[(int)command - 200];
+                task.Done = !task.Done;
+                SaveTasks();
+            }
+            else if (command >= 300 && command < 330 && command - 300 < _settings.Tasks.Count)
+            {
+                int index = (int)command - 300;
+                if (TaskDialog.Edit(_hwnd, _settings.Tasks[index]) is { } edited) { _settings.Tasks[index] = edited; SaveTasks(); }
+            }
+            else if (command >= 400 && command < 430 && command - 400 < _settings.Tasks.Count)
+            {
+                int index = (int)command - 400;
+                if (MessageBox(_hwnd, "Delete this task?\n\n" + _settings.Tasks[index].Title, "Xylo tasks", 0x124) == 6)
+                { _settings.Tasks.RemoveAt(index); SaveTasks(); }
+            }
             else if (command >= 100 && command < 110 && !_clipboard.Copy(_hwnd, (int)command - 100))
                 MessageBox(_hwnd, "Could not copy the selected item.", "Xylo", 0x10);
             PostMessage(_hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
@@ -491,6 +531,14 @@ internal sealed class IslandApp : IDisposable
     {
         _focus.StartPreset(label, seconds);
         SetTimer(_hwnd, (UIntPtr)FocusTickTimer, 1000, IntPtr.Zero);
+        _dirty = true;
+    }
+
+    private void SaveTasks()
+    {
+        try { _settings.Save(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        { MessageBox(_hwnd, "Tasks could not be saved; changes remain available until Xylo exits.", "Xylo tasks", 0x10); }
         _dirty = true;
     }
 
