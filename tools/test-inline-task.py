@@ -32,6 +32,8 @@ try:
     click(70, 95)   # Disable again, using transient test settings
     click(70, 171)  # Enable connectivity alerts
     click(70, 171)  # Disable again
+    click(70, 209)  # Enable volume HUD
+    click(70, 209)  # Disable again
     click(160, 345) # Return to first page
     click(70, 95)   # Toggle position without changing the user's settings
     click(70, 247)  # Controls -> Tasks

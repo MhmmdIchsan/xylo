@@ -2,6 +2,14 @@ namespace Xylo;
 
 internal static class SelfTest
 {
+    public static int RunVolume()
+    {
+        using var service = new VolumeHudService(_ => { });
+        service.Start();
+        for (int i = 0; i < 50 && !service.Initialized; i++) Thread.Sleep(100);
+        return service.Monitoring ? 0 : 1;
+    }
+
     public static int RunConnectivity()
     {
         using var service = new ConnectivityService(_ => { });
@@ -49,6 +57,7 @@ internal static class SelfTest
         var unknownPower = BatteryStatus.Alert(new BatteryStatus(40, false, null), new BatteryStatus(40, true, true));
         var wifiConnected = ConnectivityService.WifiAlert(new WifiState(false, ""), new WifiState(true, "test network"));
         var wifiSame = ConnectivityService.WifiAlert(new WifiState(true, "test network"), new WifiState(true, "test network"));
+        var muted = VolumeHudService.Preview(0.8f, true);
         bool staysLocked = !review.CanApprove;
         review.Next();
         bool valid = lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
@@ -59,7 +68,7 @@ internal static class SelfTest
             && task is { Title: "new task", Done: true, HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 }
             && startsLocked && staysLocked && review.CanApprove && ApprovalReview.SafeDisplay("a\u202Eb\t") == "a\\u202Eb\\u0009"
             && lowBattery?.Title == "Battery low" && plugged?.Title == "Power connected" && unknownPower == null
-            && wifiConnected?.Title == "Wi-Fi connected" && wifiSame == null;
+            && wifiConnected?.Title == "Wi-Fi connected" && wifiSame == null && muted.Title == "Muted" && muted.Progress == 0;
         return valid ? 0 : 1;
     }
 }

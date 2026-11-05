@@ -12,7 +12,7 @@ internal sealed partial class IslandApp : IDisposable
     public const float CanvasWidth = 440;
     private const float CanvasHeight = 420;
     private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9;
-    private const uint PreviewMessage = 0x8004, NotificationStatusMessage = 0x8005;
+    private const uint PreviewMessage = 0x8004, NotificationStatusMessage = 0x8005, HudMessage = 0x8006;
     private readonly WndProc _windowProcedure;
     private readonly IslandRenderer _renderer = new();
     private readonly Spring _width = new(initial: 180);
@@ -42,6 +42,8 @@ internal sealed partial class IslandApp : IDisposable
     private NotificationService? _notifications;
     private WeatherService? _weather;
     private ConnectivityService? _connectivity;
+    private VolumeHudService? _volumeHud;
+    private NotificationPreview? _pendingHud;
     private readonly Queue<NotificationPreview> _notificationQueue = new();
     private NotificationPreview? _preview;
     private bool _notificationPrompt;
@@ -92,6 +94,7 @@ internal sealed partial class IslandApp : IDisposable
             _media.Start();
             if (_settings.WeatherEnabled) StartWeather();
             if (_settings.ConnectivityAlertsEnabled) StartConnectivity();
+            if (_settings.VolumeHudEnabled) StartVolumeHud();
         }
         RefreshBattery();
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BatteryTimer, 60000, IntPtr.Zero);
@@ -277,6 +280,24 @@ internal sealed partial class IslandApp : IDisposable
                 return IntPtr.Zero;
             case PreviewMessage:
                 if (_preview == null) ShowNextNotification();
+                return IntPtr.Zero;
+            case HudMessage:
+                var hud = Interlocked.Exchange(ref _pendingHud, null);
+                if (hud != null && _settings.VolumeHudEnabled)
+                {
+                    if (_preview is { IsHud: false } previous)
+                    {
+                        lock (_notificationQueue)
+                        {
+                            if (_notificationQueue.Count >= 10) _notificationQueue.Dequeue();
+                            _notificationQueue.Enqueue(previous);
+                        }
+                    }
+                    _preview = hud;
+                    SetTimer(hwnd, (UIntPtr)PreviewTimer, 1800, IntPtr.Zero);
+                    UpdateTarget();
+                    _dirty = true;
+                }
                 return IntPtr.Zero;
             case NotificationStatusMessage:
                 if (_notifications != null && !_notifications.Requesting)
@@ -585,7 +606,7 @@ internal sealed partial class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = _settings.Detached && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
+            TaskTestSucceeded = _settings.Detached && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
         }
         else SaveTasks();
         CloseComposer();
@@ -678,6 +699,7 @@ internal sealed partial class IslandApp : IDisposable
         _notifications?.Dispose();
         _weather?.Dispose();
         _connectivity?.Dispose();
+        _volumeHud?.Dispose();
         if (_clipboardListening) RemoveClipboardFormatListener(_hwnd);
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);

@@ -13,6 +13,7 @@ internal sealed partial class IslandApp
     private bool _testPanelPagination;
     private bool _testWeatherToggled;
     private bool _testConnectivityToggled;
+    private bool _testVolumeToggled;
 
     private void ShowMenu()
     {
@@ -77,6 +78,7 @@ internal sealed partial class IslandApp
                     { _settings.BatteryAlertsEnabled = previous; ShowPrompt("Battery", "Could not save the alert setting."); }
                 }));
                 rows.Add(new(_settings.ConnectivityAlertsEnabled ? "Connectivity alerts: On" : "Connectivity alerts: Off", ToggleConnectivity));
+                rows.Add(new(_settings.VolumeHudEnabled ? "Volume HUD: On" : "Volume HUD: Off", ToggleVolumeHud));
                 rows.Add(new("Quit Xylo", () => DestroyWindow(_hwnd)));
                 break;
             case PanelPage.Tasks:
@@ -273,5 +275,39 @@ internal sealed partial class IslandApp
         });
         _connectivity = service;
         service.Start();
+    }
+
+    private void ToggleVolumeHud()
+    {
+        bool enabled = !_settings.VolumeHudEnabled;
+        if (_taskTest && enabled) _testVolumeToggled = true;
+        _settings.VolumeHudEnabled = enabled;
+        try { _settings.Save(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _settings.VolumeHudEnabled = !enabled;
+            ShowPrompt("Volume HUD", "Could not save the HUD setting.");
+            return;
+        }
+        if (enabled) StartVolumeHud();
+        else
+        {
+            _volumeHud?.Dispose();
+            _volumeHud = null;
+            Interlocked.Exchange(ref _pendingHud, null);
+            if (_preview?.IsHud == true) ShowNextNotification();
+        }
+        InvalidatePanel();
+    }
+
+    private void StartVolumeHud()
+    {
+        _volumeHud?.Dispose();
+        _volumeHud = new VolumeHudService(preview =>
+        {
+            Interlocked.Exchange(ref _pendingHud, preview);
+            PostMessage(_hwnd, HudMessage, IntPtr.Zero, IntPtr.Zero);
+        });
+        _volumeHud.Start();
     }
 }

@@ -114,7 +114,10 @@ internal sealed class IslandRenderer : IDisposable
         else if (notice != null && height < 110 && height > 54)
             Text(canvas, Truncate($"{notice.Tool} · review in {notice.Agent}", width - 48, 12), left + 24, 52, 12, new SKColor(255, 185, 100));
         else if (preview != null && height < 110 && height > 54)
+        {
             Text(canvas, Truncate(preview.Body.Replace('\n', ' ').Replace('\r', ' '), width - 48, 12), left + 24, 52, 12, new SKColor(160, 169, 179));
+            if (preview.Progress is float progress) DrawProgress(canvas, left + 24, 60, width - 48, progress);
+        }
         else if (media != null && height < 110 && height > 54)
         {
             string line = lyrics?.Current(media.CurrentPosition) ?? "Looking for lyrics…";
@@ -196,6 +199,7 @@ internal sealed class IslandRenderer : IDisposable
                 Text(canvas, Truncate(preview.App, width - 48, 12), left + 24, 70, 12, new SKColor(130, 230, 190));
                 Text(canvas, Truncate(preview.Title, width - 48, 16), left + 24, 99, 16, SKColors.White);
                 Text(canvas, Truncate(preview.Body.Replace('\n', ' ').Replace('\r', ' '), width - 48, 12), left + 24, 128, 12, new SKColor(160, 169, 179));
+                if (preview.Progress is float progress) DrawProgress(canvas, left + 24, 145, width - 48, progress);
             }
             else if (media == null)
             {
@@ -230,6 +234,15 @@ internal sealed class IslandRenderer : IDisposable
             canvas.Restore();
         }
         canvas.Restore();
+    }
+
+    private void DrawProgress(SKCanvas canvas, float x, float y, float width, float progress)
+    {
+        _paint.Style = SKPaintStyle.Fill;
+        _paint.Color = new SKColor(255, 255, 255, 30);
+        canvas.DrawRoundRect(new SKRect(x, y, x + width, y + 4), 2, 2, _paint);
+        _paint.Color = new SKColor(130, 230, 190);
+        canvas.DrawRoundRect(new SKRect(x, y, x + width * Math.Clamp(progress, 0, 1), y + 4), 2, 2, _paint);
     }
 
     private void ComposerField(SKCanvas canvas, float x, float y, float width, string value, bool selected, TaskComposer composer)
