@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -58,6 +58,8 @@ internal sealed class IslandRenderer : IDisposable
             canvas.DrawLine(eyeX + 3, 21 - eyeHeight, eyeX - 3, 21 + eyeHeight, _paint);
         }
         _paint.Style = SKPaintStyle.Fill;
+        if (media != null)
+            Text(canvas, Truncate(media.Title, Math.Max(0, width - 135), 12), left + 52, 26, 12, new SKColor(235, 240, 242));
         if (battery.Percent is int percent)
         {
             float centerX = right - 23;
@@ -78,7 +80,7 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, $"{percent}%", centerX - 39, 26, 11, new SKColor(200, 209, 213));
             if (battery.Charging) Text(canvas, "+", centerX - 3.5f, 25, 11, SKColors.White);
         }
-        else Text(canvas, "Ready", right - 58, 29, 12, new SKColor(160, 169, 179));
+        else if (media == null) Text(canvas, "Ready", right - 58, 29, 12, new SKColor(160, 169, 179));
 
         float reveal = Math.Clamp((height - 55) / 165, 0, 1);
         reveal = reveal * reveal * (3 - 2 * reveal);
@@ -87,6 +89,8 @@ internal sealed class IslandRenderer : IDisposable
             _contentOpacity.Color = SKColors.White.WithAlpha((byte)(255 * reveal));
             canvas.SaveLayer(_contentOpacity);
             canvas.Translate(0, 8 * (1 - reveal));
+            if (media == null)
+            {
             Text(canvas, "Your workspace, at a glance.", left + 24, 72, 17, SKColors.White);
             Text(canvas, "Desktop foundation is running.", left + 24, 97, 13, new SKColor(160, 169, 179));
             _paint.Color = new SKColor(255, 255, 255, 18);
@@ -95,9 +99,29 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, "No integrations connected yet", left + 24, 161, 12, new SKColor(160, 169, 179));
             Text(canvas, "Hover to open · move away to close", left + 24, 198, 12, new SKColor(130, 230, 190));
             Text(canvas, "Right-click for menu", left + 24, 218, 11, new SKColor(160, 169, 179));
+            }
+            else
+            {
+                Text(canvas, Truncate(media.Title, width - 48, 17), left + 24, 72, 17, SKColors.White);
+                Text(canvas, Truncate(media.Artist, width - 48, 13), left + 24, 97, 13, new SKColor(160, 169, 179));
+                string elapsed = TimeSpan.FromSeconds(media.CurrentPosition).ToString(@"m\:ss");
+                string total = TimeSpan.FromSeconds(Math.Max(0, media.Duration)).ToString(@"m\:ss");
+                Text(canvas, $"{elapsed} / {total}", left + 24, 145, 12, new SKColor(160, 169, 179));
+                Text(canvas, "|◀", left + 133, 208, 16, SKColors.White);
+                Text(canvas, media.Playing ? "Ⅱ" : "▶", left + 186, 208, 17, SKColors.White);
+                Text(canvas, "▶|", left + 232, 208, 16, SKColors.White);
+            }
             canvas.Restore();
         }
         canvas.Restore();
+    }
+
+    private string Truncate(string value, float maxWidth, float size)
+    {
+        _font.Size = size;
+        if (_font.MeasureText(value) <= maxWidth) return value;
+        while (value.Length > 0 && _font.MeasureText(value + "…") > maxWidth) value = value[..^1];
+        return value.Length == 0 ? "" : value + "…";
     }
 
     private void Text(SKCanvas canvas, string text, float x, float y, float size, SKColor color)

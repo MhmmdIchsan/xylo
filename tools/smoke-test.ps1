@@ -7,7 +7,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 if (Get-Process Xylo -ErrorAction SilentlyContinue) { throw 'Quit Xylo before running the smoke test.' }
 $reportPath = Join-Path $env:TEMP 'xylo-smoke-test.json'
 $started = Get-Date
-$executable = Join-Path $repository 'src/Xylo/bin/Release/net8.0-windows/win-x64/Xylo.exe'
+$executable = Join-Path $repository 'src/Xylo/bin/Release/net8.0-windows10.0.19041.0/win-x64/Xylo.exe'
 $process = Start-Process -FilePath $executable -ArgumentList '--smoke-test' -PassThru -WindowStyle Hidden
 if (!$process.WaitForExit(20000)) {
     $process.Kill()

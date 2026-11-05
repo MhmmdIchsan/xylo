@@ -32,6 +32,7 @@ internal sealed class IslandApp : IDisposable
     private PerformanceSample? _before, _beforeIdle;
     private long _idleRenderStart;
     private BatteryStatus _battery;
+    private MediaService? _media;
     private double _blinkStarted = -1;
 
     public IslandApp(bool smokeTest)
@@ -57,6 +58,11 @@ internal sealed class IslandApp : IDisposable
             windowClass.lpszClassName, "Xylo", WS_POPUP, 0, 0, 1, 1,
             IntPtr.Zero, IntPtr.Zero, windowClass.hInstance, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new Win32Exception();
+        if (!_smokeTest)
+        {
+            _media = new MediaService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
+            _media.Start();
+        }
         RefreshBattery();
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BatteryTimer, 60000, IntPtr.Zero);
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)BlinkTimer, 8000, IntPtr.Zero);
@@ -108,7 +114,12 @@ internal sealed class IslandApp : IDisposable
         KillTimer(_hwnd, (UIntPtr)CollapseTimer);
         if (_expanded == expanded) return;
         _expanded = expanded;
-        _width.Target = _expanded ? 400 : 180;
+        UpdateTarget();
+    }
+
+    private void UpdateTarget()
+    {
+        _width.Target = _expanded ? 400 : (_media?.Snapshot != null ? 340 : 180);
         _height.Target = _expanded ? 236 : 42;
         if (!_animating) _lastFrame = _clock.Elapsed.TotalSeconds;
         _animating = true;
@@ -148,6 +159,22 @@ internal sealed class IslandApp : IDisposable
                 if (!_menuOpen) SetTimer(hwnd, (UIntPtr)CollapseTimer, 180, IntPtr.Zero);
                 return IntPtr.Zero;
             case WM_LBUTTONUP:
+                if (_expanded && _media?.Snapshot != null)
+                {
+                    float mx = (short)(lParam.ToInt64() & 0xffff) / _scale;
+                    float my = (short)((lParam.ToInt64() >> 16) & 0xffff) / _scale;
+                    float left = (CanvasWidth - (float)_width.Value) / 2;
+                    if (my is >= 180 and <= 225)
+                    {
+                        if (mx >= left + 120 && mx < left + 170) _media.Control("previous");
+                        else if (mx >= left + 170 && mx < left + 220) _media.Control("toggle");
+                        else if (mx >= left + 220 && mx < left + 270) _media.Control("next");
+                    }
+                }
+                return IntPtr.Zero;
+            case WM_APP_UPDATE:
+                UpdateTarget();
+                _dirty = true;
                 return IntPtr.Zero;
             case 0x0312: // WM_HOTKEY
                 Toggle();
@@ -252,7 +279,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -357,6 +384,7 @@ internal sealed class IslandApp : IDisposable
     public void Dispose()
     {
         if (_hotkeyRegistered) UnregisterHotKey(_hwnd, 1);
+        _media?.Dispose();
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);
         ReleaseSurface();

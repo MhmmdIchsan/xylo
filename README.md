@@ -11,6 +11,7 @@ The first desktop prototype is implemented. It currently provides the notch shel
 - Composition-paced spring animation, fading content, and transparent hit testing.
 - Circular battery percentage indicator with a moving charge highlight; unavailable battery readings are hidden.
 - Minimal animated eyes blink periodically without a continuously running animation loop.
+- Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.
 - System tray menu to expand/collapse or quit.
 - Configuration in the right-click menu switches between an attached notch and a floating island; the choice is saved locally.
 - `Ctrl+Alt+X` global toggle shortcut, when available.
