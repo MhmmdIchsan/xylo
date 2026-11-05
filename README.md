@@ -10,6 +10,7 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Hover to expand; move away to collapse after a brief grace period.
 - Composition-paced spring animation, fading content, and transparent hit testing.
 - Circular battery percentage indicator with a moving charge highlight; unavailable battery readings are hidden.
+- Optional battery alerts for low or critical charge and power connection changes.
 - Minimal animated eyes blink periodically without a continuously running animation loop.
 - Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.
 - Shows the current synchronized lyric line in the compact notch and upcoming lines when expanded. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.

@@ -17,6 +17,7 @@ internal sealed class Settings
     public bool ClipboardEnabled { get; set; }
     public bool NotificationsEnabled { get; set; }
     public bool WeatherEnabled { get; set; }
+    public bool BatteryAlertsEnabled { get; set; } = true;
     public List<TaskItem> Tasks { get; set; } = new();
     [JsonIgnore]
     internal bool Transient { get; set; }

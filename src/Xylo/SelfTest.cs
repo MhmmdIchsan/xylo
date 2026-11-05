@@ -37,6 +37,9 @@ internal static class SelfTest
         var review = new ApprovalReview(request, _ => Enumerable.Range(0, 25).Select(i => i.ToString()).ToArray());
         bool startsLocked = !review.CanApprove;
         review.Next();
+        var lowBattery = BatteryStatus.Alert(new BatteryStatus(21, false, false), new BatteryStatus(20, false, false));
+        var plugged = BatteryStatus.Alert(new BatteryStatus(40, false, false), new BatteryStatus(40, true, true));
+        var unknownPower = BatteryStatus.Alert(new BatteryStatus(40, false, null), new BatteryStatus(40, true, true));
         bool staysLocked = !review.CanApprove;
         review.Next();
         bool valid = lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
@@ -45,7 +48,8 @@ internal static class SelfTest
             && history.Items.Count == 20 && history.Items[0] == "5" && history.Items.Count(x => x == "5") == 1
             && !timer.Running && timer.Remaining is >= 59 and <= 60 && rejectsInvalidDate
             && task is { Title: "new task", Done: true, HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 }
-            && startsLocked && staysLocked && review.CanApprove && ApprovalReview.SafeDisplay("a\u202Eb\t") == "a\\u202Eb\\u0009";
+            && startsLocked && staysLocked && review.CanApprove && ApprovalReview.SafeDisplay("a\u202Eb\t") == "a\\u202Eb\\u0009"
+            && lowBattery?.Title == "Battery low" && plugged?.Title == "Power connected" && unknownPower == null;
         return valid ? 0 : 1;
     }
 }

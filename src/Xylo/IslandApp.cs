@@ -35,6 +35,7 @@ internal sealed partial class IslandApp : IDisposable
     private PerformanceSample? _before, _beforeIdle;
     private long _idleRenderStart;
     private BatteryStatus _battery;
+    private bool _batteryInitialized;
     private MediaService? _media;
     private LyricsService? _lyrics;
     private AgentBridge? _agents;
@@ -461,7 +462,11 @@ internal sealed partial class IslandApp : IDisposable
 
     private void RefreshBattery()
     {
+        var previous = _battery;
         _battery = BatteryStatus.Read();
+        if (_batteryInitialized && _settings.BatteryAlertsEnabled && !_smokeTest && !_taskTest &&
+            BatteryStatus.Alert(previous, _battery) is { } alert) EnqueueNotification(alert);
+        _batteryInitialized = true;
         if (!_smokeTest && _battery.Charging) SetTimer(_hwnd, (UIntPtr)ChargeAnimationTimer, 50, IntPtr.Zero);
         else KillTimer(_hwnd, (UIntPtr)ChargeAnimationTimer);
         _dirty = true;

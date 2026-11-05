@@ -67,6 +67,14 @@ internal sealed partial class IslandApp
                 rows.Add(new($"Tasks ({_settings.Tasks.Count})  >", () => NavigatePanel(PanelPage.Tasks)));
                 rows.Add(new("Focus timer  >", () => NavigatePanel(PanelPage.Focus)));
                 rows.Add(new(_settings.WeatherEnabled ? "Weather: On" : "Weather: Off", ToggleWeather));
+                rows.Add(new(_settings.BatteryAlertsEnabled ? "Battery alerts: On" : "Battery alerts: Off", () =>
+                {
+                    bool previous = _settings.BatteryAlertsEnabled;
+                    _settings.BatteryAlertsEnabled = !previous;
+                    try { _settings.Save(); }
+                    catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                    { _settings.BatteryAlertsEnabled = previous; ShowPrompt("Battery", "Could not save the alert setting."); }
+                }));
                 rows.Add(new("Quit Xylo", () => DestroyWindow(_hwnd)));
                 break;
             case PanelPage.Tasks:
