@@ -156,8 +156,9 @@ internal sealed partial class IslandApp : IDisposable
     private void SetExpanded(bool expanded)
     {
         KillTimer(_hwnd, (UIntPtr)CollapseTimer);
-        if (!expanded && (_composer != null || _review != null || _prompt != null || _panel != null)) return;
-        if (_expanded == expanded) return;
+        if (!expanded && (_composer != null || _prompt != null || _panel != null)) return;
+        if (expanded) BeginHoverReview();
+        if (_expanded == expanded) { if (expanded && _review != null) UpdateTarget(); return; }
         _expanded = expanded;
         if (!_smokeTest) SetTimer(_hwnd, (UIntPtr)ClockTimer, expanded ? 1000u : 60000u, IntPtr.Zero);
         UpdateTarget();
@@ -165,10 +166,11 @@ internal sealed partial class IslandApp : IDisposable
 
     private void UpdateTarget()
     {
-        bool needsDetail = (_slide == 4 && _media?.Snapshot != null) || _agents?.Pending != null || _agents?.Notice != null || _preview != null;
+        bool needsDetail = (_slide == 4 && _media?.Snapshot != null) || _preview != null;
+        bool needsApproval = _agents?.Pending != null || _agents?.Notice != null;
         bool wideMusic = _expanded && _slide == 4 && _settings.LyricsEnabled && _prompt == null && _review == null && _composer == null && _panel == null && _agents?.Pending == null && _agents?.Notice == null && _preview == null;
-        double targetWidth = wideMusic ? Math.Min(660, Math.Max(400, (_displayBounds.right - _displayBounds.left) / _scale - 20)) : _prompt != null || _review != null || _composer != null || _panel != null || _expanded ? 400 : (needsDetail ? 400 : _slide == 1 && _agents?.Activity != null ? 300 : 220);
-        double targetHeight = _prompt != null ? 300 : _review != null ? 400 : _composer != null ? 300 : _panel != null ? 380 : _expanded ? 236 : (needsDetail ? 68 : 42);
+        double targetWidth = wideMusic ? Math.Min(660, Math.Max(400, (_displayBounds.right - _displayBounds.left) / _scale - 20)) : _prompt != null || _composer != null || _panel != null || _expanded ? 400 : (needsApproval ? 300 : needsDetail ? 400 : _slide == 1 && _agents?.Activity != null ? 300 : 220);
+        double targetHeight = _prompt != null ? 300 : _review != null && _expanded ? 400 : _composer != null ? 300 : _panel != null ? 380 : _expanded ? 236 : needsApproval ? 42 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
         _width.Target = targetWidth;
         _height.Target = targetHeight;
@@ -258,7 +260,7 @@ internal sealed partial class IslandApp : IDisposable
                 {
                     float rx = (short)(lParam.ToInt64() & 0xffff) / _scale - (CanvasWidth - (float)_width.Value) / 2;
                     float ry = (short)((lParam.ToInt64() >> 16) & 0xffff) / _scale;
-                    if (_height.Value >= 390)
+                    if (_expanded && _height.Value >= 390)
                     {
                         if (ry is >= 304 and <= 338 && rx is >= 24 and <= 98) _review.Previous();
                         else if (ry is >= 304 and <= 338 && rx is >= 108 and <= 182) _review.Next();
@@ -269,14 +271,7 @@ internal sealed partial class IslandApp : IDisposable
                     _dirty = true;
                     return IntPtr.Zero;
                 }
-                if (_agents?.Pending is { } request)
-                {
-                    _review = new ApprovalReview(request, _renderer.WrapReview);
-                    _expanded = true;
-                    UpdateTarget();
-                    _dirty = true;
-                    return IntPtr.Zero;
-                }
+                if (_agents?.Pending != null) return IntPtr.Zero;
                 if (_panel != null)
                 {
                     float px = (short)(lParam.ToInt64() & 0xffff) / _scale - (CanvasWidth - (float)_width.Value) / 2;
@@ -361,6 +356,7 @@ internal sealed partial class IslandApp : IDisposable
                 SyncAgentAnimation();
                 if (_agents?.Pending != null && _panel != null) { _panel = null; _panelView = null; _menuOpen = false; }
                 if (_review != null && !ReferenceEquals(_agents?.Pending, _review.Request)) _review = null;
+                if (_expanded) BeginHoverReview();
                 if (_agents?.Notice != null) SetTimer(hwnd, (UIntPtr)NoticeTimer, 5000, IntPtr.Zero);
                 else KillTimer(hwnd, (UIntPtr)NoticeTimer);
                 UpdateTarget();
@@ -541,6 +537,12 @@ internal sealed partial class IslandApp : IDisposable
     {
         if (_slide == 1 && _agents?.Activity?.Working == true) SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, 80, IntPtr.Zero);
         else KillTimer(_hwnd, (UIntPtr)AgentFrameTimer);
+    }
+
+    private void BeginHoverReview()
+    {
+        if (_review == null && _composer == null && _prompt == null && _panel == null && _agents?.Pending is { } request && !request.Completion.Task.IsCompleted)
+            _review = new ApprovalReview(request, _renderer.WrapReview);
     }
 
     private void BuildSurface()

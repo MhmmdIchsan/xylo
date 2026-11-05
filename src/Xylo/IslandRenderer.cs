@@ -63,7 +63,7 @@ internal sealed class IslandRenderer : IDisposable
         _paint.Style = SKPaintStyle.Fill;
         if (prompt != null)
             Text(canvas, "Attention", left + 52, 26, 12, SKColors.White);
-        else if (review != null)
+        else if (review != null && height > 100)
             Text(canvas, "Review request", left + 52, 26, 12, SKColors.White);
         else if (composer != null)
             Text(canvas, composer.EditIndex == null ? "New task" : "Edit task", left + 52, 26, 12, SKColors.White);
@@ -122,16 +122,12 @@ internal sealed class IslandRenderer : IDisposable
             for (int i = 0; i < 3; i++) canvas.DrawCircle(right - 91 + i * 6, 21, 1.7f, _paint);
         }
 
-        if (approval != null && height < 110 && height > 54)
-            Text(canvas, Truncate($"{approval.Tool} · click to review ({pendingCount})", width - 48, 12), left + 24, 52, 12, new SKColor(255, 185, 100));
-        else if (notice != null && height < 110 && height > 54)
-            Text(canvas, Truncate($"{notice.Tool} · review in {notice.Agent}", width - 48, 12), left + 24, 52, 12, new SKColor(255, 185, 100));
-        else if (preview != null && height < 110 && height > 54)
+        if (approval == null && notice == null && preview != null && height < 110 && height > 54)
         {
             Text(canvas, Truncate(preview.Body.Replace('\n', ' ').Replace('\r', ' '), width - 48, 12), left + 24, 52, 12, new SKColor(160, 169, 179));
             if (preview.Progress is float progress) DrawProgress(canvas, left + 24, 60, width - 48, progress);
         }
-        else if (slide == 4 && media != null && height < 110 && height > 54)
+        else if (approval == null && notice == null && slide == 4 && media != null && height < 110 && height > 54)
         {
             string line = string.IsNullOrWhiteSpace(media.Artist) ? "Now playing" : media.Artist;
             CenterText(canvas, Truncate(line, width - 48, 12), left + width / 2, 52, 12, new SKColor(130, 230, 190));

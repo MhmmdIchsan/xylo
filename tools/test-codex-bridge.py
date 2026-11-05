@@ -1,5 +1,6 @@
 """Integration test for a synthetic approval; Xylo must already be running."""
 import ctypes
+import atexit
 import json
 import os
 import pathlib
@@ -10,6 +11,10 @@ import time
 user32 = ctypes.windll.user32
 user32.FindWindowW.restype = ctypes.c_void_p
 user32.GetDpiForWindow.argtypes = [ctypes.c_void_p]
+class Point(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+class Rect(ctypes.Structure):
+    _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
 root = pathlib.Path(__file__).resolve().parents[1]
 agent = sys.argv[1] if len(sys.argv) > 1 else "codex"
 hook = root / "integrations" / agent / "xylo_hook.py"
@@ -39,6 +44,16 @@ def notch_scale():
         preset = 1
     return user32.GetDpiForWindow(ctypes.c_void_p(window)) / 96 * {0: 0.9, 1: 1.0, 2: 1.1}.get(preset, 1.0)
 
+original_cursor = Point()
+user32.GetCursorPos(ctypes.byref(original_cursor))
+atexit.register(lambda: user32.SetCursorPos(original_cursor.x, original_cursor.y))
+def hover():
+    rect = Rect()
+    if not user32.GetWindowRect(ctypes.c_void_p(window), ctypes.byref(rect)):
+        raise RuntimeError("Could not locate the notch")
+    user32.SetCursorPos((rect.left + rect.right) // 2, rect.top + int(20 * notch_scale()))
+    user32.PostMessageW(ctypes.c_void_p(window), 0x0200, 0, 0)
+
 for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
     command = [sys.executable, str(hook)] + (["PreToolUse"] if agent == "antigravity" else [])
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -46,8 +61,17 @@ for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
     process.stdin.write(json.dumps(event).encode())
     process.stdin.close()
     time.sleep(0.5)
-    user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, 0)
+    hover()  # Hover opens the review
     time.sleep(1)
+    if choice == 6:
+        rect = Rect()
+        user32.GetWindowRect(ctypes.c_void_p(window), ctypes.byref(rect))
+        user32.SetCursorPos((rect.left + rect.right) // 2, rect.bottom + 10)
+        user32.PostMessageW(ctypes.c_void_p(window), 0x02A3, 0, 0)  # Leave without deciding
+        time.sleep(1)
+        assert process.poll() is None, "Leaving the notch unexpectedly resolved the request"
+        hover()
+        time.sleep(1)
     scale = notch_scale()
     x = int(({6: 336, 7: 210, 2: 94}[choice] + 130) * scale)
     y = int(373 * scale)
@@ -80,7 +104,7 @@ if agent == "codex":
         process.stdin.write(json.dumps(event).encode())
         process.stdin.close()
         time.sleep(0.5)
-        user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, 0)
+        hover()  # Hover opens the review
         time.sleep(1)
         scale = notch_scale()
         def click(x, y):
