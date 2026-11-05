@@ -40,7 +40,7 @@ for choice, expected in [(6, "allow"), (7, "deny"), (2, None)]:
     user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, 0)
     time.sleep(1)
     scale = user32.GetDpiForWindow(ctypes.c_void_p(window)) / 96
-    x = int(({6: 336, 7: 210, 2: 94}[choice]) * scale)
+    x = int(({6: 336, 7: 210, 2: 94}[choice] + 130) * scale)
     y = int(373 * scale)
     user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, x | (y << 16))
     process.wait(timeout=5)
@@ -70,7 +70,7 @@ if agent == "codex":
         time.sleep(1)
         scale = user32.GetDpiForWindow(ctypes.c_void_p(window)) / 96
         def click(x, y):
-            user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, int(x * scale) | (int(y * scale) << 16))
+            user32.PostMessageW(ctypes.c_void_p(window), 0x202, 0, int((x + 130) * scale) | (int(y * scale) << 16))
             time.sleep(0.05)
         click(336, 373)
         assert process.poll() is None, "Allow was accepted before all pages were reviewed"

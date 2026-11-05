@@ -22,8 +22,10 @@ try:
     time.sleep(1)
     scale = u.GetDpiForWindow(hwnd) / 96
     def click(x, y):
-        u.SendMessageW(hwnd, 0x0202, 0, int(x * scale) | (int(y * scale) << 16))
-        time.sleep(0.3)
+        width = u.SendMessageW(hwnd, 0x8019, 0, 0)
+        canvas_x = (700 - width) / 2 + x - 20
+        u.SendMessageW(hwnd, 0x0202, 0, int(canvas_x * scale) | (int(y * scale) << 16))
+        time.sleep(0.8)
     for x in (69, 119, 169, 219, 269, 319, 369):
         click(x, 60)
     click(319, 60)  # Clipboard
@@ -36,7 +38,8 @@ try:
     click(269, 60)  # Music
     click(350, 200) # Disable lyrics in Music
     click(350, 200) # Re-enable lyrics in Music
-    click(330, 21)  # Open controls
+    width = u.SendMessageW(hwnd, 0x8019, 0, 0)
+    click(width - 70, 21)  # Open controls at the right edge
     time.sleep(1)
     click(230, 345) # Controls -> next page
     click(70, 95)   # Ask to enable weather

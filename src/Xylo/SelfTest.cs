@@ -2,6 +2,25 @@ namespace Xylo;
 
 internal static class SelfTest
 {
+    private static bool TestMediaRendering()
+    {
+        using var cover = new SkiaSharp.SKBitmap(4, 4);
+        cover.Erase(new SkiaSharp.SKColor(220, 20, 20));
+        using var image = SkiaSharp.SKImage.FromBitmap(cover);
+        using var encoded = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        var media = new MediaSnapshot("Test track", "Test artist", "Test album", true, 30, 120, DateTimeOffset.UtcNow, encoded.ToArray(), true);
+        using var bitmap = new SkiaSharp.SKBitmap(700, 420);
+        using var canvas = new SkiaSharp.SKCanvas(bitmap);
+        using var renderer = new IslandRenderer();
+        renderer.Draw(canvas, 1, 660, 236, false, new BatteryStatus(null, false, null), 0, -1,
+            media, new LyricsSnapshot("test", Array.Empty<LyricLine>(), "one\ntwo", "missing"), true,
+            new FocusTimer(), null, 0, null, null, null, Array.Empty<TaskItem>(), 4,
+            null, null, null, null, null, false, 0, false, Array.Empty<string>());
+        canvas.Flush();
+        var pixel = bitmap.GetPixel(89, 139);
+        return pixel.Red > 180 && pixel.Green < 60;
+    }
+
     public static int RunBrightness()
     {
         using var service = new BrightnessHudService(_ => { });
@@ -69,7 +88,7 @@ internal static class SelfTest
         var muted = VolumeHudService.Preview(0.8f, true);
         bool staysLocked = !review.CanApprove;
         review.Next();
-        bool valid = lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
+        bool valid = TestMediaRendering() && lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
             && synced.Current(1) == "♪" && synced.Current(3) == "first" && synced.Current(8) == "second"
             && plain.Current(0) == "one" && plain.Visible(0).SequenceEqual(new[] { "one", "two", "three" })
             && ReferenceEquals(plain.Visible(0), plain.Visible(5)) && duplicateTimes.Current(2) == "second" && duplicateTimes.Current(4) == "♪" && duplicateTimes.Visible(2)[0] == "second"

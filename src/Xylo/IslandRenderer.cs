@@ -9,11 +9,14 @@ internal sealed class IslandRenderer : IDisposable
     private readonly SKFont _font;
     private readonly SKPath _outline = new();
     private readonly SKPaint _contentOpacity = new();
+    private byte[]? _artData;
+    private SKBitmap? _artwork;
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
     public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, bool clipboardEnabled, IReadOnlyList<string> clipboardItems)
     {
+        if (media == null && _artData != null) { _artwork?.Dispose(); _artwork = null; _artData = null; }
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
         canvas.Scale(scale);
@@ -283,19 +286,40 @@ internal sealed class IslandRenderer : IDisposable
                 }
                 else if (slide == 4)
                 {
-                    if (media == null) CenterText(canvas, "No media playing", left + width / 2, 140, 14, new SKColor(160, 169, 179));
+                    if (media == null) CenterText(canvas, "No media playing", left + 200, 140, 14, new SKColor(160, 169, 179));
                     else
                     {
-                        CenterText(canvas, Truncate(media.Title + " · " + media.Artist, width - 48, 13), left + width / 2, 101, 13, SKColors.White);
-                        string[] visible = lyrics?.Visible(media.CurrentPosition) ?? new[] { lyricsEnabled ? "Looking for lyrics…" : "Lyrics off" };
-                        for (int i = 0; i < Math.Min(3, visible.Length); i++)
-                            CenterText(canvas, Truncate(visible[i], width - 48, 12), left + width / 2, 126 + 17 * i, 12,
-                                i == 0 ? new SKColor(130, 230, 190) : new SKColor(160, 169, 179));
+                        DrawArtwork(canvas, left + 24, 94, media.Artwork);
+                        Text(canvas, Truncate(media.Title, 246, 14), left + 130, 108, 14, SKColors.White);
+                        Text(canvas, Truncate(media.Artist, 246, 12), left + 130, 130, 12, new SKColor(160, 169, 179));
+                        float progress = media.Duration > 0 ? (float)Math.Clamp(media.CurrentPosition / media.Duration, 0, 1) : 0;
+                        DrawProgress(canvas, left + 130, 150, 246, progress);
+                        Text(canvas, FormatTime(media.CurrentPosition), left + 130, 172, 10, new SKColor(160, 169, 179));
+                        string duration = FormatTime(media.Duration);
+                        _font.Size = 10;
+                        Text(canvas, duration, left + 376 - _font.MeasureText(duration), 172, 10, new SKColor(160, 169, 179));
                         DrawTransport(canvas, left + 145, 201, -1, false, true);
                         DrawTransport(canvas, left + 195, 201, 1, media.Playing, false);
                         DrawTransport(canvas, left + 245, 201, 1, false, true);
                     }
                     DrawButton(canvas, left + 290, 180, 86, 40, lyricsEnabled ? "Lyrics on" : "Lyrics off", false);
+                    if (lyricsEnabled && width >= 520)
+                    {
+                        _paint.Color = new SKColor(255, 255, 255, 30); _paint.StrokeWidth = 1;
+                        canvas.DrawLine(left + 398, 95, left + 398, 213, _paint);
+                        float lyricWidth = width - 430;
+                        float lyricCenter = left + 414 + lyricWidth / 2;
+                        CenterText(canvas, "LYRICS", lyricCenter, 105, 10, new SKColor(160, 169, 179));
+                        string[] visible = media == null ? new[] { "No media playing" } : lyrics?.Visible(media.CurrentPosition) ?? new[] { "Looking for lyrics…" };
+                        for (int i = 0; i < Math.Min(3, visible.Length); i++)
+                            CenterText(canvas, Truncate(visible[i], lyricWidth, 12), lyricCenter, 133 + 23 * i, 12,
+                                i == 0 ? new SKColor(130, 230, 190) : new SKColor(160, 169, 179));
+                    }
+                    else if (lyricsEnabled && media != null)
+                    {
+                        string line = lyrics?.Current(media.CurrentPosition) ?? "Looking for lyrics…";
+                        CenterText(canvas, Truncate(line, 246, 9), left + 253, 142, 9, new SKColor(130, 230, 190));
+                    }
                 }
                 else if (slide == 5)
                 {
@@ -329,6 +353,44 @@ internal sealed class IslandRenderer : IDisposable
         canvas.DrawRoundRect(new SKRect(x, y, x + width, y + 4), 2, 2, _paint);
         _paint.Color = new SKColor(130, 230, 190);
         canvas.DrawRoundRect(new SKRect(x, y, x + width * Math.Clamp(progress, 0, 1), y + 4), 2, 2, _paint);
+    }
+
+    private void DrawArtwork(SKCanvas canvas, float x, float y, byte[]? bytes)
+    {
+        if (!ReferenceEquals(_artData, bytes))
+        {
+            _artwork?.Dispose(); _artwork = null; _artData = bytes;
+            if (bytes != null)
+            {
+                try
+                {
+                    using var data = SKData.CreateCopy(bytes);
+                    using var codec = SKCodec.Create(data);
+                    if (codec != null && codec.Info.Width is > 0 and <= 1024 && codec.Info.Height is > 0 and <= 1024)
+                    {
+                        using var decoded = SKBitmap.Decode(codec);
+                        if (decoded != null) _artwork = decoded.Resize(new SKImageInfo(128, 128), new SKSamplingOptions(SKFilterMode.Linear));
+                    }
+                }
+                catch { }
+            }
+        }
+        _paint.Color = new SKColor(38, 50, 53); _paint.Style = SKPaintStyle.Fill;
+        var rect = new SKRect(x, y, x + 90, y + 90);
+        canvas.DrawRoundRect(rect, 10, 10, _paint);
+        if (_artwork != null)
+        {
+            canvas.Save(); canvas.ClipRoundRect(new SKRoundRect(rect, 10));
+            _paint.Color = SKColors.White; canvas.DrawBitmap(_artwork, rect, _paint); canvas.Restore();
+        }
+        else DrawTabIcon(canvas, x + 45, y + 45, 4, true);
+    }
+
+    private static string FormatTime(double seconds)
+    {
+        if (!double.IsFinite(seconds) || seconds < 0 || seconds > 359999) return "--:--";
+        var time = TimeSpan.FromSeconds(seconds);
+        return time.TotalHours >= 1 ? time.ToString(@"h\:mm\:ss") : time.ToString(@"m\:ss");
     }
 
     private void ComposerField(SKCanvas canvas, float x, float y, float width, string value, bool selected, TaskComposer composer)
@@ -480,6 +542,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public void Dispose()
     {
+        _artwork?.Dispose();
         _font.Dispose();
         _outline.Dispose();
         _contentOpacity.Dispose();

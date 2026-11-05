@@ -9,7 +9,7 @@ namespace Xylo;
 
 internal sealed partial class IslandApp : IDisposable
 {
-    public const float CanvasWidth = 440;
+    public const float CanvasWidth = 700;
     private const float CanvasHeight = 420;
     private const uint CollapseTimer = 1, SmokeTimer = 2, BatteryTimer = 3, ChargeAnimationTimer = 4, BlinkTimer = 5, BlinkFrameTimer = 6, FocusTickTimer = 7, PreviewTimer = 8, NoticeTimer = 9, ClockTimer = 10;
     private const uint PreviewMessage = 0x8004, NotificationStatusMessage = 0x8005, HudMessage = 0x8006;
@@ -165,7 +165,8 @@ internal sealed partial class IslandApp : IDisposable
     private void UpdateTarget()
     {
         bool needsDetail = (_slide == 4 && _media?.Snapshot != null) || _agents?.Pending != null || _agents?.Notice != null || _preview != null;
-        double targetWidth = _prompt != null || _review != null || _composer != null || _panel != null || _expanded ? 400 : (needsDetail ? 400 : _slide == 1 && _agents?.Activity != null ? 300 : 220);
+        bool wideMusic = _expanded && _slide == 4 && _settings.LyricsEnabled && _prompt == null && _review == null && _composer == null && _panel == null && _agents?.Pending == null && _agents?.Notice == null && _preview == null;
+        double targetWidth = wideMusic ? Math.Min(660, Math.Max(400, GetSystemMetrics(SM_CXSCREEN) / _scale - 20)) : _prompt != null || _review != null || _composer != null || _panel != null || _expanded ? 400 : (needsDetail ? 400 : _slide == 1 && _agents?.Activity != null ? 300 : 220);
         double targetHeight = _prompt != null ? 300 : _review != null ? 400 : _composer != null ? 300 : _panel != null ? 380 : _expanded ? 236 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
         _width.Target = targetWidth;
@@ -184,6 +185,9 @@ internal sealed partial class IslandApp : IDisposable
         }
         switch (message)
         {
+            case 0x8019: // Query target width for the isolated interaction test.
+                if (_taskTest) return new IntPtr((int)_width.Target);
+                break;
             case WM_NCHITTEST:
                 float x = ((short)(lParam.ToInt64() & 0xffff) - _x) / _scale;
                 float y = ((short)((lParam.ToInt64() >> 16) & 0xffff) - _y) / _scale;
@@ -303,6 +307,8 @@ internal sealed partial class IslandApp : IDisposable
                     { ShowMenu(); NavigatePanel(PanelPage.Tasks); return IntPtr.Zero; }
                     if (_slide == 4 && my is >= 180 and <= 220 && localX is >= 290 and <= 376)
                     { ToggleLyrics(); return IntPtr.Zero; }
+                    if (_slide == 4 && _media?.Snapshot is { CanSeek: true, Duration: > 0 } && my is >= 140 and <= 168 && localX is >= 130 and <= 376)
+                    { _media.Seek((localX - 130) / 246); return IntPtr.Zero; }
                     if (_slide == 5)
                     {
                         if (my is >= 175 and <= 220 && localX is >= 24 and <= 180) { ToggleClipboard(); if (_taskTest && _clipboardListening) _testClipboardToggled = true; _dirty = true; return IntPtr.Zero; }

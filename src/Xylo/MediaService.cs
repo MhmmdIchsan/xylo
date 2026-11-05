@@ -1,9 +1,10 @@
 using Windows.Media.Control;
+using Windows.Storage.Streams;
 
 namespace Xylo;
 
 internal sealed record MediaSnapshot(string Title, string Artist, string Album, bool Playing,
-    double Position, double Duration, DateTimeOffset Updated)
+    double Position, double Duration, DateTimeOffset Updated, byte[]? Artwork = null, bool CanSeek = false)
 {
     public double CurrentPosition => Math.Clamp(Position + (Playing ? Math.Max(0, (DateTimeOffset.UtcNow - Updated).TotalSeconds) : 0), 0, Duration > 0 ? Duration : double.MaxValue);
 }
@@ -14,6 +15,8 @@ internal sealed class MediaService : IDisposable
     private readonly Action _changed;
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private volatile MediaSnapshot? _snapshot;
+    private string _artKey = "";
+    private byte[]? _artwork;
     public MediaSnapshot? Snapshot => _snapshot;
 
     public MediaService(Action changed) => _changed = changed;
@@ -34,11 +37,21 @@ internal sealed class MediaService : IDisposable
                     var playback = session.GetPlaybackInfo();
                     var timeline = session.GetTimelineProperties();
                     if (!string.IsNullOrWhiteSpace(properties.Title))
+                    {
+                        string key = session.SourceAppUserModelId + "\n" + properties.Title + "\n" + properties.Artist + "\n" + properties.AlbumTitle;
+                        if (key != _artKey)
+                        {
+                            _artKey = key;
+                            _artwork = await ReadArtworkAsync(properties.Thumbnail);
+                        }
                         next = new(properties.Title, properties.Artist ?? "", properties.AlbumTitle ?? "",
                             playback.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
                             timeline.Position.TotalSeconds, timeline.EndTime.TotalSeconds,
-                            timeline.LastUpdatedTime == default ? DateTimeOffset.UtcNow : timeline.LastUpdatedTime);
+                            timeline.LastUpdatedTime == default ? DateTimeOffset.UtcNow : timeline.LastUpdatedTime,
+                            _artwork, playback.Controls?.IsPlaybackPositionEnabled == true);
+                    }
                 }
+                if (next == null) { _artKey = ""; _artwork = null; }
                 var previous = _snapshot;
                 _snapshot = next;
                 if (previous != next || next?.Playing == true) _changed();
@@ -51,6 +64,35 @@ internal sealed class MediaService : IDisposable
             try { await Task.Delay(1000, _stop.Token); }
             catch (OperationCanceledException) { break; }
         }
+    }
+
+    private static async Task<byte[]?> ReadArtworkAsync(IRandomAccessStreamReference? thumbnail)
+    {
+        if (thumbnail == null) return null;
+        try
+        {
+            using var stream = await thumbnail.OpenReadAsync();
+            if (stream.Size == 0 || stream.Size > 1024 * 1024) return null;
+            using var reader = new DataReader(stream);
+            uint size = (uint)stream.Size;
+            if (await reader.LoadAsync(size) != size) return null;
+            var bytes = new byte[size];
+            reader.ReadBytes(bytes);
+            return bytes;
+        }
+        catch { return null; }
+    }
+
+    public async void Seek(double fraction)
+    {
+        try
+        {
+            var snapshot = _snapshot;
+            var session = _manager?.GetCurrentSession();
+            if (snapshot is { CanSeek: true, Duration: > 0 } && session != null)
+                await session.TryChangePlaybackPositionAsync(TimeSpan.FromSeconds(snapshot.Duration * Math.Clamp(fraction, 0, 1)).Ticks);
+        }
+        catch { }
     }
 
     public async void Control(string action)

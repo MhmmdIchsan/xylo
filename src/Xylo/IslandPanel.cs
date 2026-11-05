@@ -359,6 +359,7 @@ internal sealed partial class IslandApp
         }
         if (enabled) StartLyrics();
         else { _lyrics?.Dispose(); _lyrics = null; }
+        UpdateTarget();
         InvalidatePanel();
         _dirty = true;
     }

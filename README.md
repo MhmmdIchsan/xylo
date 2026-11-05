@@ -18,8 +18,8 @@ The desktop prototype includes media, lyrics, battery status, optional clipboard
 - Task due dates and times are adjusted using controls in the notch; time changes in 15-minute steps.
 - Notification previews show a WhatsApp or call badge when Windows identifies WhatsApp and supplies matching call text. WhatsApp Web notifications may appear under the browser without enough information to identify their origin or call type.
 - Minimal animated eyes blink periodically without a continuously running animation loop.
-- Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.
-- Shows synchronized lyrics in the Music view. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.
+- Displays the active Windows media session (including Spotify) with cover art, previous, play/pause, next and a progress bar in the expanded notch. Click the bar to seek when the media app supports it.
+- Shows synchronized lyrics beside the player when enabled. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source and available screen width.
 - Hover over the notch to see today's date and time, then choose Agent, Weather, To-do, Music, Clipboard, or Focus to switch views. The last selected view remains active when the notch closes and reopens; only Music shows the current media in the compact notch. Manage tasks, clipboard history, focus timer and weather directly from their views; approval requests remain visible regardless of the selected view.
 - The Music view has a lyrics on/off button. Agent completion notices require the corresponding agent hooks to report both start and completion.
 - Lyrics can be disabled in the notch controls to stop lyric requests while keeping media controls available.
