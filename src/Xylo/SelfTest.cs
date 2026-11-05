@@ -15,7 +15,7 @@ internal static class SelfTest
         renderer.Draw(canvas, 1, 660, 236, false, new BatteryStatus(null, false, null), 0, -1,
             media, new LyricsSnapshot("test", Array.Empty<LyricLine>(), "one\ntwo", "missing"), true,
             new FocusTimer(), null, 0, null, null, null, Array.Empty<TaskItem>(), 4,
-            null, null, null, null, null, false, 0, false, Array.Empty<string>());
+            null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>());
         canvas.Flush();
         var pixel = bitmap.GetPixel(89, 139);
         return pixel.Red > 180 && pixel.Green < 60;

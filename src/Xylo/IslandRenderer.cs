@@ -14,7 +14,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, bool clipboardEnabled, IReadOnlyList<string> clipboardItems)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled, int unreadCount, IReadOnlyList<NotificationPreview> notifications, bool notificationsEnabled, bool clipboardEnabled, IReadOnlyList<string> clipboardItems)
     {
         if (media == null && _artData != null) { _artwork?.Dispose(); _artwork = null; _artData = null; }
         canvas.Clear(SKColors.Transparent);
@@ -85,7 +85,7 @@ internal sealed class IslandRenderer : IDisposable
         else if (slide == 6 && focus.Active)
             Text(canvas, Truncate(focus.Display, width - 125, 12), left + 52, 26, 12, new SKColor(130, 230, 190));
         else
-            Text(canvas, DateTime.Now.ToString("HH:mm"), left + 52, 26, 13, SKColors.White);
+            CenterText(canvas, DateTime.Now.ToString("HH:mm"), left + width / 2, 26, 13, SKColors.White);
         if (battery.Percent is int percent)
         {
             float centerX = right - 23;
@@ -103,11 +103,10 @@ internal sealed class IslandRenderer : IDisposable
                 canvas.DrawArc(ring, (float)(seconds * 120 % 360) - 90, 28, false, _paint);
             }
             _paint.Style = SKPaintStyle.Fill;
-            Text(canvas, $"{percent}%", centerX - 39, 26, 11, new SKColor(200, 209, 213));
-            if (battery.Charging) Text(canvas, "+", centerX - 3.5f, 25, 11, SKColors.White);
+            CenterText(canvas, $"{percent}%", centerX, 23.5f, percent >= 100 ? 6.5f : 7.5f, SKColors.White);
         }
         if (unreadCount > 0 && height < 100 && preview == null && approval == null && notice == null)
-            DrawBell(canvas, right - (battery.Percent.HasValue ? 82 : 24), 21);
+            DrawBell(canvas, right - (battery.Percent.HasValue ? 50 : 24), 21);
 
         if (height > 200 && panel == null && composer == null && review == null && prompt == null && approval == null)
         {
@@ -232,19 +231,28 @@ internal sealed class IslandRenderer : IDisposable
                 if (slide == 0)
                 {
                     var now = DateTime.Now;
-                    Text(canvas, now.ToString("HH:mm"), left + 25, 135, 38, SKColors.White);
-                    Text(canvas, Truncate(now.ToString("dddd, d MMMM yyyy"), 235, 13), left + 26, 159, 13, new SKColor(160, 180, 179));
-                    _paint.Color = new SKColor(130, 230, 190, 28);
-                    canvas.DrawRoundRect(new SKRect(left + 278, 95, left + 374, 196), 14, 14, _paint);
-                    CenterText(canvas, now.ToString("MMM").ToUpperInvariant(), left + 326, 120, 12, new SKColor(130, 230, 190));
-                    CenterText(canvas, now.ToString("dd"), left + 326, 164, 35, SKColors.White);
+                    CenterText(canvas, now.ToString("HH:mm"), left + 105, 130, 34, SKColors.White);
+                    CenterText(canvas, Truncate(now.ToString("ddd, d MMM yyyy"), 160, 11), left + 105, 151, 11, new SKColor(160, 180, 179));
                     int mondayOffset = ((int)now.DayOfWeek + 6) % 7;
                     for (int i = 0; i < 7; i++)
                     {
                         DateTime day = now.Date.AddDays(i - mondayOffset);
-                        float x = left + 40 + i * 31;
+                        float x = left + 36 + i * 23;
                         CenterText(canvas, day.ToString("ddd")[..1], x, 184, 10, new SKColor(160, 169, 179));
                         CenterText(canvas, day.Day.ToString(), x, 205, 12, i == mondayOffset ? new SKColor(130, 230, 190) : SKColors.White);
+                    }
+                    _paint.Color = new SKColor(255, 255, 255, 25); _paint.StrokeWidth = 1;
+                    canvas.DrawLine(left + 207, 96, left + 207, 212, _paint);
+                    Text(canvas, "Notifications", left + 220, 108, 12, SKColors.White);
+                    if (notifications.Count == 0)
+                        Text(canvas, notificationsEnabled ? "All caught up" : "Notifications off", left + 220, 139, 11, new SKColor(160, 169, 179));
+                    for (int i = 0; i < Math.Min(3, notifications.Count); i++)
+                    {
+                        var item = notifications[i];
+                        string title = item.Title.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ');
+                        string app = item.Kind.StartsWith("whatsapp", StringComparison.Ordinal) ? "WhatsApp" : item.App;
+                        Text(canvas, Truncate(title, 154, 11), left + 220, 132 + 29 * i, 11, new SKColor(225, 235, 235));
+                        Text(canvas, Truncate(app.Replace('\r', ' ').Replace('\n', ' '), 154, 9), left + 220, 145 + 29 * i, 9, new SKColor(160, 169, 179));
                     }
                 }
                 else if (slide == 1)

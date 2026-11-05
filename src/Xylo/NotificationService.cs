@@ -14,7 +14,10 @@ internal sealed class NotificationService : IDisposable
     private volatile bool _requesting;
     private volatile bool _disposed;
     private int _unreadCount;
+    private readonly object _snapshotGate = new();
+    private NotificationPreview[] _activeNotifications = Array.Empty<NotificationPreview>();
     public int UnreadCount => Volatile.Read(ref _unreadCount);
+    public NotificationPreview[] ActiveNotifications => Volatile.Read(ref _activeNotifications);
     public bool Active => _active;
     public bool Requesting => _requesting;
     public string? LastError { get; private set; }
@@ -69,6 +72,7 @@ internal sealed class NotificationService : IDisposable
     {
         var token = run.Token;
         var seen = new HashSet<uint>();
+        var cache = new Dictionary<uint, NotificationPreview>();
         bool initialized = false;
         try
         {
@@ -81,12 +85,21 @@ internal sealed class NotificationService : IDisposable
                 }
                 var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast);
                 token.ThrowIfCancellationRequested();
-                if (Interlocked.Exchange(ref _unreadCount, notifications.Count) != notifications.Count) _statusChanged();
                 var current = new HashSet<uint>();
-                foreach (var notification in notifications)
+                var display = new List<NotificationPreview>(3);
+                var keep = new HashSet<uint>();
+                foreach (var notification in notifications.OrderByDescending(n => n.CreationTime))
                 {
                     current.Add(notification.Id);
-                    if (!initialized || seen.Contains(notification.Id)) continue;
+                    bool isNew = initialized && !seen.Contains(notification.Id);
+                    bool show = display.Count < 3;
+                    if (!isNew && !show) continue;
+                    if (show && cache.TryGetValue(notification.Id, out var cached))
+                    {
+                        display.Add(cached); keep.Add(notification.Id);
+                        if (isNew) _received(cached);
+                        continue;
+                    }
                     string app = "Notification", title = "", body = "";
                     try { app = notification.AppInfo?.DisplayInfo?.DisplayName ?? app; }
                     catch { /* Some desktop apps do not expose AppInfo. */ }
@@ -97,9 +110,25 @@ internal sealed class NotificationService : IDisposable
                         body = elements is { Count: > 1 } ? string.Join(" ", elements.Skip(1).Select(t => t.Text)) : "";
                     }
                     catch { /* Some apps provide a toast without readable text. */ }
-                    if (!token.IsCancellationRequested)
-                        _received(CreatePreview(app, title, body));
+                    var preview = CreatePreview(app, title, body);
+                    if (show) { display.Add(preview); cache[notification.Id] = preview; keep.Add(notification.Id); }
+                    if (isNew && !token.IsCancellationRequested) _received(preview);
                 }
+                foreach (var id in cache.Keys.Where(id => !keep.Contains(id)).ToArray()) cache.Remove(id);
+                bool changed = false;
+                lock (_snapshotGate)
+                {
+                    if (ReferenceEquals(_stop, run) && !token.IsCancellationRequested)
+                    {
+                        changed = _unreadCount != notifications.Count || !_activeNotifications.SequenceEqual(display);
+                        if (changed)
+                        {
+                            Volatile.Write(ref _unreadCount, notifications.Count);
+                            Volatile.Write(ref _activeNotifications, display.ToArray());
+                        }
+                    }
+                }
+                if (changed) _statusChanged();
                 seen = current;
                 initialized = true;
                 await Task.Delay(1500, token);
@@ -107,7 +136,21 @@ internal sealed class NotificationService : IDisposable
         }
         catch (OperationCanceledException) { }
         catch { LastError = "Could not read Windows notifications."; }
-        finally { if (ReferenceEquals(_stop, run)) { _active = false; _statusChanged(); } run.Dispose(); }
+        finally
+        {
+            bool stopped = false;
+            lock (_snapshotGate)
+            {
+                if (ReferenceEquals(_stop, run))
+                {
+                    _stop = null; _active = false; stopped = true;
+                    Volatile.Write(ref _unreadCount, 0);
+                    Volatile.Write(ref _activeNotifications, Array.Empty<NotificationPreview>());
+                }
+            }
+            if (stopped) _statusChanged();
+            run.Dispose();
+        }
     }
 
     internal static NotificationPreview CreatePreview(string app, string title, string body)
@@ -117,6 +160,10 @@ internal sealed class NotificationService : IDisposable
         return new NotificationPreview(Short(app, 100), Short(string.IsNullOrEmpty(title) ? app : title, 200), Short(body, 500), Kind: call ? "whatsapp-call" : whatsapp ? "whatsapp" : "notification");
     }
     private static string Short(string text, int limit) => text.Length <= limit ? text : text[..limit] + "…";
-    public void Stop() { var run = _stop; _stop = null; run?.Cancel(); _active = false; Interlocked.Exchange(ref _unreadCount, 0); }
+    public void Stop()
+    {
+        lock (_snapshotGate) { var run = _stop; _stop = null; run?.Cancel(); Volatile.Write(ref _unreadCount, 0); Volatile.Write(ref _activeNotifications, Array.Empty<NotificationPreview>()); }
+        _active = false;
+    }
     public void Dispose() { _disposed = true; Stop(); }
 }

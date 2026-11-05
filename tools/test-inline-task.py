@@ -22,10 +22,18 @@ try:
     time.sleep(1)
     scale = u.GetDpiForWindow(hwnd) / 96
     def click(x, y):
-        width = u.SendMessageW(hwnd, 0x8019, 0, 0)
+        for _ in range(60):
+            width = u.SendMessageW(hwnd, 0x8019, 0, 0)
+            actual = u.SendMessageW(hwnd, 0x801A, 0, 0)
+            height_error = u.SendMessageW(hwnd, 0x801B, 0, 0)
+            if abs(width - actual) <= 1 and abs(height_error) <= 1:
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("Notch animation did not settle")
         canvas_x = (700 - width) / 2 + x - 20
         u.SendMessageW(hwnd, 0x0202, 0, int(canvas_x * scale) | (int(y * scale) << 16))
-        time.sleep(0.8)
+        time.sleep(0.3)
     for x in (69, 119, 169, 219, 269, 319, 369):
         click(x, 60)
     click(319, 60)  # Clipboard

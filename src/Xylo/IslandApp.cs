@@ -188,6 +188,12 @@ internal sealed partial class IslandApp : IDisposable
             case 0x8019: // Query target width for the isolated interaction test.
                 if (_taskTest) return new IntPtr((int)_width.Target);
                 break;
+            case 0x801A:
+                if (_taskTest) return new IntPtr((int)Math.Round(_width.Value));
+                break;
+            case 0x801B:
+                if (_taskTest) return new IntPtr((int)Math.Round(_height.Value) - (int)Math.Round(_height.Target));
+                break;
             case WM_NCHITTEST:
                 float x = ((short)(lParam.ToInt64() & 0xffff) - _x) / _scale;
                 float y = ((short)((lParam.ToInt64() >> 16) & 0xffff) - _y) / _scale;
@@ -549,7 +555,7 @@ internal sealed partial class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _clipboardListening, _clipboard.Items);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled, _notifications?.UnreadCount ?? 0, _notifications?.ActiveNotifications ?? Array.Empty<NotificationPreview>(), _notifications?.Active == true, _clipboardListening, _clipboard.Items);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
