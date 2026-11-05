@@ -444,7 +444,7 @@ internal sealed partial class IslandApp : IDisposable
                 else if (wParam.ToInt64() == ChargeAnimationTimer) _dirty = true;
                 else if (wParam.ToInt64() == AgentFrameTimer)
                 {
-                    if (_slide != 1 || _agents?.Activity?.Working != true) KillTimer(hwnd, (UIntPtr)AgentFrameTimer);
+                    if (_agents?.Activity?.Working != true) KillTimer(hwnd, (UIntPtr)AgentFrameTimer);
                     else _dirty = true;
                 }
                 else if (wParam.ToInt64() == ClockTimer) _dirty = true;
@@ -535,7 +535,7 @@ internal sealed partial class IslandApp : IDisposable
 
     private void SyncAgentAnimation()
     {
-        if (_slide == 1 && _agents?.Activity?.Working == true) SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, 80, IntPtr.Zero);
+        if (_agents?.Activity?.Working == true) SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, 80, IntPtr.Zero);
         else KillTimer(_hwnd, (UIntPtr)AgentFrameTimer);
     }
 

@@ -70,9 +70,9 @@ internal sealed class IslandRenderer : IDisposable
         else if (panel != null)
             Text(canvas, "Controls", left + 52, 26, 12, SKColors.White);
         else if (approval != null)
-            Text(canvas, approval.Agent + " needs approval", left + 52, 26, 12, new SKColor(255, 185, 100));
+            CenterText(canvas, Truncate(approval.Agent + " needs approval", width - 120, 12), left + width / 2, 26, 12, new SKColor(255, 185, 100));
         else if (notice != null)
-            Text(canvas, notice.Agent + " needs approval", left + 52, 26, 12, new SKColor(255, 185, 100));
+            CenterText(canvas, Truncate(notice.Agent + " needs approval", width - 120, 12), left + width / 2, 26, 12, new SKColor(255, 185, 100));
         else if (preview != null)
         {
             if (!preview.IsHud) NotificationIcon(canvas, left + 62, 20, preview.Kind);
@@ -115,6 +115,12 @@ internal sealed class IslandRenderer : IDisposable
         }
         if (unreadCount > 0 && height < 100 && preview == null && approval == null && notice == null)
             DrawBell(canvas, right - (battery.Percent.HasValue ? 50 : 24), 21);
+        if (slide != 1 && agent?.Working == true && approval == null && notice == null && preview == null && prompt == null && review == null && composer == null && panel == null)
+        {
+            bool bell = unreadCount > 0 && height < 100;
+            float offset = battery.Percent.HasValue ? (bell ? 76 : 50) : (bell ? 50 : 24);
+            DrawLoader(canvas, right - offset, 21, seconds);
+        }
 
         if (height > 200 && panel == null && composer == null && review == null && prompt == null && approval == null)
         {
