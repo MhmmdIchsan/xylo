@@ -31,7 +31,7 @@ internal sealed record LyricsSnapshot(string Key, LyricLine[] Lines, string? Pla
 
 internal sealed class LyricsService : IDisposable
 {
-    private static readonly Regex Timestamp = new(@"\[(\d{1,3}):(\d{2}(?:[.,]\d{1,3})?)\]", RegexOptions.Compiled);
+    private static readonly Regex Timestamp = new(@"\[(\d{1,3}):(\d{2}(?:[.,]\d{1,3})?)\]");
     private static readonly HttpClient Http = CreateClient();
     private readonly SemaphoreSlim _serial = new(1, 1);
     private readonly Action _changed;
@@ -87,10 +87,10 @@ internal sealed class LyricsService : IDisposable
                 _nextAllowed = DateTimeOffset.UtcNow.Add(delay < TimeSpan.Zero ? TimeSpan.Zero : delay).AddSeconds(Random.Shared.NextDouble());
             }
             if (!response.IsSuccessStatusCode) { Publish(key, null, null, "Lyrics unavailable", token); return; }
-            if (response.Content.Headers.ContentLength > 262144) { Publish(key, null, null, "Lyrics unavailable", token); return; }
+            if (response.Content.Headers.ContentLength > 65536) { Publish(key, null, null, "Lyrics unavailable", token); return; }
             await using var stream = await response.Content.ReadAsStreamAsync(token);
             using var reader = new StreamReader(stream);
-            char[] buffer = new char[262145];
+            char[] buffer = new char[32769];
             int count = 0, read;
             while (count < buffer.Length && (read = await reader.ReadAsync(buffer.AsMemory(count), token)) > 0) count += read;
             if (count == buffer.Length) { Publish(key, null, null, "Lyrics unavailable", token); return; }
