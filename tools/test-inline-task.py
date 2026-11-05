@@ -24,6 +24,10 @@ try:
     def click(x, y):
         u.SendMessageW(hwnd, 0x0202, 0, int(x * scale) | (int(y * scale) << 16))
         time.sleep(0.3)
+    for x in (70, 160, 250, 340):
+        click(x, 60)
+    click(330, 21)  # Open controls
+    time.sleep(1)
     click(230, 345) # Controls -> next page
     click(70, 95)   # Ask to enable weather
     time.sleep(0.8)

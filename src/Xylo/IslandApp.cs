@@ -28,6 +28,8 @@ internal sealed partial class IslandApp : IDisposable
     private NOTIFYICONDATA _tray;
     private bool _trayAdded, _expanded, _dirty = true, _quit, _hotkeyRegistered;
     private bool _animating, _trackingMouse, _menuOpen;
+    private int _slide;
+    private int _testSlides;
     private float _scale = 1;
     private int _pixelWidth, _pixelHeight, _x, _y, _smokeTicks;
     private double _lastFrame;
@@ -107,7 +109,7 @@ internal sealed partial class IslandApp : IDisposable
         AddTrayIcon();
         // Ctrl + Alt + X, with MOD_NOREPEAT. A collision does not prevent startup.
         _hotkeyRegistered = RegisterHotKey(_hwnd, 1, 0x4003, 0x58);
-        if (_taskTest) ShowMenu();
+        if (_taskTest) { _expanded = true; UpdateTarget(); }
         if (_smokeTest && SetTimer(_hwnd, (UIntPtr)SmokeTimer, 500, IntPtr.Zero) == UIntPtr.Zero)
             throw new Win32Exception();
 
@@ -258,12 +260,24 @@ internal sealed partial class IslandApp : IDisposable
                     { ShowMenu(); return IntPtr.Zero; }
                 }
                 if (_preview != null) return IntPtr.Zero;
-                if (_expanded && _media?.Snapshot != null)
+                if (_expanded)
                 {
                     float mx = (short)(lParam.ToInt64() & 0xffff) / _scale;
                     float my = (short)((lParam.ToInt64() >> 16) & 0xffff) / _scale;
                     float left = (CanvasWidth - (float)_width.Value) / 2;
-                    if (my is >= 180 and <= 225)
+                    float localX = mx - left;
+                    if (my is >= 48 and <= 78 && localX is >= 24 and < 376)
+                    {
+                        _slide = Math.Clamp((int)((localX - 24) / 88), 0, 3);
+                        if (_taskTest) _testSlides |= 1 << _slide;
+                        _dirty = true;
+                        return IntPtr.Zero;
+                    }
+                    if (_slide == 1 && !_settings.WeatherEnabled && my is >= 175 and <= 220 && localX is >= 24 and <= 180)
+                    { ToggleWeather(); return IntPtr.Zero; }
+                    if (_slide == 2 && my is >= 175 and <= 220 && localX is >= 24 and <= 180)
+                    { ShowMenu(); NavigatePanel(PanelPage.Tasks); return IntPtr.Zero; }
+                    if (_slide == 3 && _media?.Snapshot != null && my is >= 180 and <= 225)
                     {
                         if (mx >= left + 120 && mx < left + 170) _media.Control("previous");
                         else if (mx >= left + 170 && mx < left + 220) _media.Control("toggle");
@@ -473,7 +487,7 @@ internal sealed partial class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks.Count, _settings.Tasks.Count(t => t.Done), _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _settings.LyricsEnabled, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity, _preview, _agents?.Notice, _settings.Tasks, _slide, _composer, _review, _prompt, BuildPanelView(), _weather?.Snapshot, _settings.WeatherEnabled);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -608,7 +622,7 @@ internal sealed partial class IslandApp : IDisposable
         else { CloseComposer(); return; }
         if (_taskTest)
         {
-            TaskTestSucceeded = _settings.Detached && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
+            TaskTestSucceeded = _settings.Detached && _testSlides == 15 && _testPanelPagination && _testWeatherToggled && !_settings.WeatherEnabled && _testConnectivityToggled && !_settings.ConnectivityAlertsEnabled && _testVolumeToggled && !_settings.VolumeHudEnabled && _testBrightnessToggled && !_settings.BrightnessHudEnabled && _testLyricsToggled && _settings.LyricsEnabled && task is { Title: "synthetic task", HasTime: true, Due.Year: 2030, Due.Month: 12, Due.Day: 24, Due.Hour: 13, Due.Minute: 30 };
         }
         else SaveTasks();
         CloseComposer();

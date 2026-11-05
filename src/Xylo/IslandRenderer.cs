@@ -12,7 +12,7 @@ internal sealed class IslandRenderer : IDisposable
 
     public IslandRenderer() => _font = new SKFont(_typeface, 14);
 
-    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, int taskCount, int completedTasks, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled)
+    public void Draw(SKCanvas canvas, float scale, float width, float height, bool detached, BatteryStatus battery, double seconds, double blinkStarted, MediaSnapshot? media, LyricsSnapshot? lyrics, bool lyricsEnabled, FocusTimer focus, AgentApproval? approval, int pendingCount, AgentActivity? agent, NotificationPreview? preview, AgentNotice? notice, IReadOnlyList<TaskItem> tasks, int slide, TaskComposer? composer, ApprovalReview? review, InlinePrompt? prompt, PanelView? panel, WeatherSnapshot? weather, bool weatherEnabled)
     {
         canvas.Clear(SKColors.Transparent);
         canvas.Save();
@@ -121,7 +121,7 @@ internal sealed class IslandRenderer : IDisposable
         else if (media != null && height < 110 && height > 54)
         {
             string line = lyrics?.Current(media.CurrentPosition) ?? (lyricsEnabled ? "Looking for lyrics…" : "Lyrics off");
-            Text(canvas, Truncate(line, width - 48, 12), left + 24, 52, 12, new SKColor(130, 230, 190));
+            CenterText(canvas, Truncate(line, width - 48, 12), left + width / 2, 52, 12, new SKColor(130, 230, 190));
         }
 
         float reveal = Math.Clamp((height - 55) / 165, 0, 1);
@@ -201,35 +201,50 @@ internal sealed class IslandRenderer : IDisposable
                 Text(canvas, Truncate(preview.Body.Replace('\n', ' ').Replace('\r', ' '), width - 48, 12), left + 24, 128, 12, new SKColor(160, 169, 179));
                 if (preview.Progress is float progress) DrawProgress(canvas, left + 24, 145, width - 48, progress);
             }
-            else if (media == null)
-            {
-            Text(canvas, "Your workspace, at a glance.", left + 24, 72, 17, SKColors.White);
-            string weatherText = weather != null ? $"{weather.City}: {weather.Summary}" : weatherEnabled ? "Weather loading or unavailable" : "Your controls are ready.";
-            Text(canvas, Truncate(weatherText, width - 48, 13), left + 24, 97, 13, new SKColor(160, 169, 179));
-            _paint.Color = new SKColor(255, 255, 255, 18);
-            canvas.DrawLine(left + 24, 114, left + width - 24, 114, _paint);
-            Text(canvas, "Focus timer", left + 24, 140, 13, SKColors.White);
-            Text(canvas, focus.Active ? $"{focus.Label}: {focus.Display}" : "Start a timer from the right-click menu", left + 24, 161, 12, new SKColor(160, 169, 179));
-            Text(canvas, agent != null ? agent.Agent + (agent.Working ? " working" : " finished") : $"Tasks: {completedTasks}/{taskCount} done", left + 24, 181, 11, new SKColor(130, 230, 190));
-            Text(canvas, "Hover to open · move away to close", left + 24, 198, 12, new SKColor(130, 230, 190));
-            Text(canvas, "Right-click for menu", left + 24, 218, 11, new SKColor(160, 169, 179));
-            }
             else
             {
-                Text(canvas, Truncate(media.Title, width - 48, 17), left + 24, 72, 17, SKColors.White);
-                Text(canvas, Truncate(media.Artist, width - 48, 13), left + 24, 97, 13, new SKColor(160, 169, 179));
-                string elapsed = TimeSpan.FromSeconds(media.CurrentPosition).ToString(@"m\:ss");
-                string total = TimeSpan.FromSeconds(Math.Max(0, media.Duration)).ToString(@"m\:ss");
-                Text(canvas, $"{elapsed} / {total}", left + 24, 118, 11, new SKColor(160, 169, 179));
-                if (focus.Active)
-                    Text(canvas, focus.Display, right - 78, 118, 11, new SKColor(130, 230, 190));
-                string[] visible = lyrics?.Visible(media.CurrentPosition) ?? new[] { lyricsEnabled ? "Looking for lyrics…" : "Lyrics off" };
-                for (int i = 0; i < Math.Min(3, visible.Length); i++)
-                    Text(canvas, Truncate(visible[i], width - 48, 12), left + 24, 140 + 17 * i, 12,
-                        i == 0 ? new SKColor(130, 230, 190) : new SKColor(160, 169, 179));
-                DrawTransport(canvas, left + 145, 201, -1, false, true);
-                DrawTransport(canvas, left + 195, 201, 1, media.Playing, false);
-                DrawTransport(canvas, left + 245, 201, 1, false, true);
+                string[] tabs = { "AI Agent", "Weather", "To-do", "Music" };
+                for (int i = 0; i < tabs.Length; i++)
+                {
+                    float tabX = left + 24 + i * 88;
+                    _paint.Color = i == slide ? new SKColor(130, 230, 190, 45) : new SKColor(255, 255, 255, 12);
+                    canvas.DrawRoundRect(new SKRect(tabX, 48, tabX + 82, 78), 8, 8, _paint);
+                    CenterText(canvas, tabs[i], tabX + 41, 68, 11, i == slide ? new SKColor(130, 230, 190) : new SKColor(190, 200, 200));
+                }
+                if (slide == 0)
+                {
+                    Text(canvas, "AI Agent", left + 24, 105, 16, SKColors.White);
+                    Text(canvas, agent == null ? "No recent agent activity" : Truncate(agent.Agent + (agent.Working ? " · working" : " · finished"), 352, 13), left + 24, 132, 13, new SKColor(130, 230, 190));
+                    if (agent != null) Text(canvas, Truncate(agent.Project, 352, 12), left + 24, 155, 12, new SKColor(160, 169, 179));
+                    Text(canvas, "Approval requests appear here automatically", left + 24, 204, 11, new SKColor(160, 169, 179));
+                }
+                else if (slide == 1)
+                {
+                    Text(canvas, "Weather", left + 24, 105, 16, SKColors.White);
+                    Text(canvas, Truncate(weather != null ? $"{weather.City} · {weather.Summary}" : weatherEnabled ? "Loading or unavailable" : "Weather is off", 352, 13), left + 24, 135, 13, new SKColor(130, 230, 190));
+                    if (!weatherEnabled) DrawButton(canvas, left + 24, 175, 156, 40, "Enable weather", false);
+                }
+                else if (slide == 2)
+                {
+                    Text(canvas, $"To-do · {tasks.Count(t => t.Done)}/{tasks.Count} done", left + 24, 104, 15, SKColors.White);
+                    var open = tasks.Where(t => !t.Done).Take(2).ToArray();
+                    if (open.Length == 0) Text(canvas, "No open tasks", left + 24, 133, 12, new SKColor(160, 169, 179));
+                    for (int i = 0; i < open.Length; i++) Text(canvas, Truncate("○  " + open[i].Title, 350, 12), left + 24, 132 + i * 22, 12, new SKColor(220, 230, 230));
+                    DrawButton(canvas, left + 24, 175, 156, 40, "Manage tasks", false);
+                }
+                else if (media == null)
+                    CenterText(canvas, "No media playing", left + width / 2, 140, 14, new SKColor(160, 169, 179));
+                else
+                {
+                    CenterText(canvas, Truncate(media.Title + " · " + media.Artist, width - 48, 13), left + width / 2, 101, 13, SKColors.White);
+                    string[] visible = lyrics?.Visible(media.CurrentPosition) ?? new[] { lyricsEnabled ? "Looking for lyrics…" : "Lyrics off" };
+                    for (int i = 0; i < Math.Min(3, visible.Length); i++)
+                        CenterText(canvas, Truncate(visible[i], width - 48, 12), left + width / 2, 126 + 17 * i, 12,
+                            i == 0 ? new SKColor(130, 230, 190) : new SKColor(160, 169, 179));
+                    DrawTransport(canvas, left + 145, 201, -1, false, true);
+                    DrawTransport(canvas, left + 195, 201, 1, media.Playing, false);
+                    DrawTransport(canvas, left + 245, 201, 1, false, true);
+                }
             }
             canvas.Restore();
         }
@@ -334,6 +349,13 @@ internal sealed class IslandRenderer : IDisposable
         _font.Size = size;
         _paint.Color = color;
         canvas.DrawText(text, x, y, SKTextAlign.Left, _font, _paint);
+    }
+
+    private void CenterText(SKCanvas canvas, string text, float x, float y, float size, SKColor color)
+    {
+        _font.Size = size;
+        _paint.Color = color;
+        canvas.DrawText(text, x, y, SKTextAlign.Center, _font, _paint);
     }
 
     public void Dispose()
