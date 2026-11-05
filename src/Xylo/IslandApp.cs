@@ -34,6 +34,8 @@ internal sealed class IslandApp : IDisposable
     private BatteryStatus _battery;
     private MediaService? _media;
     private LyricsService? _lyrics;
+    private readonly ClipboardHistory _clipboard = new();
+    private bool _clipboardListening;
     private double _blinkStarted = -1;
 
     public IslandApp(bool smokeTest)
@@ -59,6 +61,7 @@ internal sealed class IslandApp : IDisposable
             windowClass.lpszClassName, "Xylo", WS_POPUP, 0, 0, 1, 1,
             IntPtr.Zero, IntPtr.Zero, windowClass.hInstance, IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new Win32Exception();
+        if (!_smokeTest && _settings.ClipboardEnabled) _clipboardListening = AddClipboardFormatListener(_hwnd);
         if (!_smokeTest)
         {
             _lyrics = new LyricsService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
@@ -181,6 +184,9 @@ internal sealed class IslandApp : IDisposable
                 _lyrics?.Update(_media?.Snapshot);
                 UpdateTarget();
                 _dirty = true;
+                return IntPtr.Zero;
+            case 0x031D: // WM_CLIPBOARDUPDATE
+                if (_clipboardListening) _clipboard.Capture(hwnd);
                 return IntPtr.Zero;
             case 0x0312: // WM_HOTKEY
                 Toggle();
@@ -326,6 +332,18 @@ internal sealed class IslandApp : IDisposable
         {
             AppendMenu(menu, MF_STRING, (UIntPtr)1, _expanded ? "Collapse Xylo" : "Expand Xylo");
             AppendMenu(menu, MF_STRING, (UIntPtr)3, _settings.Detached ? "Configuration: Attach to top" : "Configuration: Float below top");
+            AppendMenu(menu, MF_STRING, (UIntPtr)4, _clipboardListening ? "Disable clipboard history" : "Enable clipboard history");
+            if (_clipboardListening && _clipboard.Items.Count > 0)
+            {
+                AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, "");
+                for (int i = 0; i < Math.Min(10, _clipboard.Items.Count); i++)
+                {
+                    string preview = _clipboard.Items[i].Replace('\r', ' ').Replace('\n', ' ').Replace("&", "&&");
+                    if (preview.Length > 55) preview = preview[..55] + "…";
+                    AppendMenu(menu, MF_STRING, (UIntPtr)(100 + i), preview);
+                }
+                AppendMenu(menu, MF_STRING, (UIntPtr)5, "Clear clipboard history");
+            }
             AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, "");
             AppendMenu(menu, MF_STRING, (UIntPtr)2, "Quit Xylo");
             GetCursorPos(out var cursor);
@@ -347,6 +365,10 @@ internal sealed class IslandApp : IDisposable
                 _y = _settings.Detached ? (int)(12 * _scale) : 0;
                 _dirty = true;
             }
+            else if (command == 4) ToggleClipboard();
+            else if (command == 5) _clipboard.Clear();
+            else if (command >= 100 && command < 110 && !_clipboard.Copy(_hwnd, (int)command - 100))
+                MessageBox(_hwnd, "Could not copy the selected item.", "Xylo", 0x10);
             PostMessage(_hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
         }
         finally
@@ -356,6 +378,24 @@ internal sealed class IslandApp : IDisposable
             GetCursorPos(out var cursor);
             if (!IsInsidePill((cursor.X - _x) / _scale, (cursor.Y - _y) / _scale))
                 SetTimer(_hwnd, (UIntPtr)CollapseTimer, 180, IntPtr.Zero);
+        }
+    }
+
+    private void ToggleClipboard()
+    {
+        bool enable = !_clipboardListening;
+        if (enable && !AddClipboardFormatListener(_hwnd))
+        {
+            MessageBox(_hwnd, "Could not enable clipboard history.", "Xylo", 0x10);
+            return;
+        }
+        if (!enable) { RemoveClipboardFormatListener(_hwnd); _clipboard.Clear(); }
+        _clipboardListening = enable;
+        _settings.ClipboardEnabled = enable;
+        try { _settings.Save(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            MessageBox(_hwnd, "Clipboard setting could not be saved.", "Xylo", 0x10);
         }
     }
 
@@ -392,6 +432,7 @@ internal sealed class IslandApp : IDisposable
         if (_hotkeyRegistered) UnregisterHotKey(_hwnd, 1);
         _media?.Dispose();
         _lyrics?.Dispose();
+        if (_clipboardListening) RemoveClipboardFormatListener(_hwnd);
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);
         ReleaseSurface();

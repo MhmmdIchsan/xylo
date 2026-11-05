@@ -4,6 +4,20 @@ namespace Xylo;
 
 internal static partial class Native
 {
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool AddClipboardFormatListener(IntPtr hwnd);
+    [DllImport("user32.dll")]
+    public static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool EmptyClipboard();
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SetClipboardData(uint format, IntPtr memory);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr GlobalAlloc(uint flags, nuint bytes);
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GlobalFree(IntPtr memory);
+    [DllImport("kernel32.dll")]
+    public static extern nuint GlobalSize(IntPtr memory);
     [DllImport("dwmapi.dll")]
     public static extern int DwmFlush();
 

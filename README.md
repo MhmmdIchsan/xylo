@@ -2,7 +2,7 @@
 
 Xylo is a Dynamic Island for Windows: a compact desktop notch being developed for AI agent activity, notifications, and quick clipboard access.
 
-The first desktop prototype is implemented. It currently provides the notch shell; agent integrations, notification previews, and clipboard history are not implemented yet.
+The first desktop prototype includes media, lyrics, battery status, and optional clipboard history. Agent integrations and notification previews are not implemented yet.
 
 ## Available now
 
@@ -13,6 +13,7 @@ The first desktop prototype is implemented. It currently provides the notch shel
 - Minimal animated eyes blink periodically without a continuously running animation loop.
 - Displays the active Windows media session (including Spotify), with previous, play/pause, and next controls in the expanded notch.
 - Shows the current synchronized lyric line in the compact notch and upcoming lines when expanded. Lyrics are fetched from LRCLIB using track metadata; no Spotify login is required. Unsynchronized lyrics show their first lines. Availability depends on the source.
+- Optional clipboard history in the right-click menu: enable explicitly, then select a recent text item to copy it. History holds up to 20 entries in memory and is cleared on exit or when disabled. Clipboard entries may contain sensitive information.
 - System tray menu to expand/collapse or quit.
 - Configuration in the right-click menu switches between an attached notch and a floating island; the choice is saved locally.
 - `Ctrl+Alt+X` global toggle shortcut, when available.
@@ -49,7 +50,7 @@ Quit any running instance before testing. The test briefly shows the notch and e
 - AI agent activity: working, waiting for input, completed, and failed states across multiple sessions.
 - Approval requests in the notch, with approve/reject actions where the agent integration supports them.
 - Windows notification previews, including messaging apps when their notifications expose message content.
-- Text clipboard history with search and pinned snippets.
+- Clipboard search and pinned snippets.
 - Configurable notch appearance, placement, and notification priorities.
 
 Planned agent integrations include Codex, Claude Code, OpenCode, Cursor, and Antigravity. Supported capabilities will depend on each agent's available integration interfaces.

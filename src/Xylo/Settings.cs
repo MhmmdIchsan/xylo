@@ -5,6 +5,7 @@ namespace Xylo;
 internal sealed class Settings
 {
     public bool Detached { get; set; }
+    public bool ClipboardEnabled { get; set; }
     private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Xylo", "settings.json");
 
     public static Settings Load()
