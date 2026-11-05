@@ -7,6 +7,8 @@ internal sealed class IslandRenderer : IDisposable
     private readonly SKTypeface _typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Normal);
     private readonly SKPaint _paint = new() { IsAntialias = true };
     private readonly SKFont _font;
+    private readonly Dictionary<int, SKFont?> _characterFonts = new();
+    private readonly Dictionary<string, (SKTypeface Typeface, SKFont Font)> _fallbackFonts = new();
     private readonly SKPath _outline = new();
     private readonly SKPath _maskPath = new();
     private readonly SKPath _maskSegment = new();
@@ -153,7 +155,7 @@ internal sealed class IslandRenderer : IDisposable
             Text(canvas, Truncate(preview.IsHud ? preview.Title : NotificationService.SourceLabel(preview), Math.Max(0, width - 155), 12), left + (preview.IsHud ? 52 : 78), 26, 12, SKColors.White);
         }
         else if (slide == 4 && media != null)
-            CenterText(canvas, Truncate(string.IsNullOrWhiteSpace(media.Artist) ? media.Title : media.Title + " ? " + media.Artist, Math.Max(0, width - 140), 11), left + width / 2, 26, 11, new SKColor(235, 240, 242));
+            CenterText(canvas, Truncate(string.IsNullOrWhiteSpace(media.Artist) ? media.Title : media.Title + " - " + media.Artist, Math.Max(0, width - 140), 11), left + width / 2, 26, 11, new SKColor(235, 240, 242));
         else if (slide == 1 && agent != null)
         {
             int working = agents.Count(a => a.Working);
@@ -208,7 +210,7 @@ internal sealed class IslandRenderer : IDisposable
         }
         else if (approval == null && notice == null && slide == 4 && media != null && height < 110 && height > 54)
         {
-            string line = lyricsEnabled ? lyrics?.Current(media.CurrentPosition) ?? "Looking for lyrics?" : "Lyrics off";
+            string line = lyricsEnabled ? lyrics?.Current(media.CurrentPosition) ?? "Looking for lyrics..." : "Lyrics off";
             CenterText(canvas, Truncate(line, width - 48, 12), left + width / 2, 52, 12, new SKColor(130, 230, 190));
         }
 
@@ -602,26 +604,86 @@ internal sealed class IslandRenderer : IDisposable
             canvas.DrawRect(new SKRect(x + direction * 7 - 1, y - 7, x + direction * 7 + 1, y + 7), _paint);
     }
 
-    private string Truncate(string value, float maxWidth, float size)
+    // Skia's simple DrawText does not select a fallback font for missing glyphs.
+    // Resolve each Unicode scalar against Windows' font manager, then draw font runs.
+    private SKFont FontFor(int codepoint)
+    {
+        if (_font.ContainsGlyph(codepoint)) return _font;
+        if (_characterFonts.TryGetValue(codepoint, out var cached)) return cached ?? _font;
+        SKFont? fallback = null;
+        using var matched = SKFontManager.Default.MatchCharacter(codepoint);
+        if (matched != null)
+        {
+            string family = matched.FamilyName;
+            if (!_fallbackFonts.TryGetValue(family, out var entry) && _fallbackFonts.Count < 32)
+            {
+                var face = SKTypeface.FromFamilyName(family);
+                entry = (face, new SKFont(face, _font.Size));
+                _fallbackFonts.Add(family, entry);
+            }
+            if (entry.Font != null && entry.Font.ContainsGlyph(codepoint)) fallback = entry.Font;
+        }
+        // Bound the per-character lookup cache, including missing glyphs.
+        if (_characterFonts.Count >= 1024) _characterFonts.Clear();
+        _characterFonts[codepoint] = fallback;
+        return fallback ?? _font;
+    }
+
+    internal bool HasGlyphs(string text)
+    {
+        foreach (var rune in text.EnumerateRunes())
+            if (!FontFor(rune.Value).ContainsGlyph(rune.Value)) return false;
+        return true;
+    }
+
+    private float LayoutText(SKCanvas? canvas, string text, float x, float y, float size)
     {
         _font.Size = size;
-        if (_font.MeasureText(value) <= maxWidth) return value;
-        while (value.Length > 0 && _font.MeasureText(value + "…") > maxWidth) value = value[..^1];
-        return value.Length == 0 ? "" : value + "…";
+        float width = 0;
+        int runStart = 0, index = 0;
+        SKFont? runFont = null;
+        void Flush(int end)
+        {
+            if (runFont == null || end == runStart) return;
+            string run = text[runStart..end];
+            runFont.Size = size;
+            if (canvas != null) canvas.DrawText(run, x + width, y, SKTextAlign.Left, runFont, _paint);
+            width += runFont.MeasureText(run);
+        }
+        foreach (var rune in text.EnumerateRunes())
+        {
+            var font = FontFor(rune.Value);
+            if (runFont != null && !ReferenceEquals(font, runFont)) { Flush(index); runStart = index; }
+            runFont = font;
+            index += rune.Utf16SequenceLength;
+        }
+        Flush(index);
+        return width;
+    }
+
+    private string Truncate(string value, float maxWidth, float size)
+    {
+        if (LayoutText(null, value, 0, 0, size) <= maxWidth) return value;
+        var elements = System.Globalization.StringInfo.ParseCombiningCharacters(value);
+        for (int i = elements.Length - 1; i >= 0; i--)
+        {
+            string candidate = value[..elements[i]] + "?";
+            if (LayoutText(null, candidate, 0, 0, size) <= maxWidth) return candidate;
+        }
+        return "";
     }
 
     private void Text(SKCanvas canvas, string text, float x, float y, float size, SKColor color)
     {
-        _font.Size = size;
         _paint.Color = color;
-        canvas.DrawText(text, x, y, SKTextAlign.Left, _font, _paint);
+        LayoutText(canvas, text, x, y, size);
     }
 
     private void CenterText(SKCanvas canvas, string text, float x, float y, float size, SKColor color)
     {
-        _font.Size = size;
         _paint.Color = color;
-        canvas.DrawText(text, x, y, SKTextAlign.Center, _font, _paint);
+        float width = LayoutText(null, text, 0, 0, size);
+        LayoutText(canvas, text, x - width / 2, y, size);
     }
 
     private void DrawTabIcon(SKCanvas canvas, float x, float y, int icon, bool selected)
@@ -679,6 +741,7 @@ internal sealed class IslandRenderer : IDisposable
         _maskMeasure.Dispose();
         _maskSegment.Dispose();
         _maskPath.Dispose();
+        foreach (var fallback in _fallbackFonts.Values) { fallback.Font.Dispose(); fallback.Typeface.Dispose(); }
         _font.Dispose();
         _outline.Dispose();
         _contentOpacity.Dispose();

@@ -106,7 +106,8 @@ internal static class SelfTest
             null, null, null, null, null, false, 0, Array.Empty<NotificationPreview>(), false, false, Array.Empty<string>(), true, Enumerable.Range(0, 7).ToArray(), Array.Empty<AgentActivity>(), false, null, "Unavailable", false, -1);
         canvas.Flush();
         var pixel = bitmap.GetPixel(89, 139);
-        return pixel.Red > 180 && pixel.Green < 60;
+        // The system fallback must cover mixed Korean/Latin lyrics, not .notdef boxes.
+        return pixel.Red > 180 && pixel.Green < 60 && renderer.HasGlyphs("K-pop ?? ?? 123");
     }
 
     public static int RunBrightness()
