@@ -34,6 +34,7 @@ internal sealed class IslandApp : IDisposable
     private BatteryStatus _battery;
     private MediaService? _media;
     private LyricsService? _lyrics;
+    private AgentBridge? _agents;
     private readonly ClipboardHistory _clipboard = new();
     private readonly FocusTimer _focus = new();
     private bool _clipboardListening;
@@ -65,6 +66,8 @@ internal sealed class IslandApp : IDisposable
         if (!_smokeTest && _settings.ClipboardEnabled) _clipboardListening = AddClipboardFormatListener(_hwnd);
         if (!_smokeTest)
         {
+            _agents = new AgentBridge(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
+            _agents.Start();
             _lyrics = new LyricsService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _media = new MediaService(() => PostMessage(_hwnd, WM_APP_UPDATE, IntPtr.Zero, IntPtr.Zero));
             _media.Start();
@@ -125,8 +128,9 @@ internal sealed class IslandApp : IDisposable
 
     private void UpdateTarget()
     {
-        double targetWidth = _expanded ? 400 : (_media?.Snapshot != null ? 400 : 180);
-        double targetHeight = _expanded ? 236 : (_media?.Snapshot != null ? 68 : 42);
+        bool needsDetail = _media?.Snapshot != null || _agents?.Pending != null;
+        double targetWidth = _expanded ? 400 : (needsDetail ? 400 : 180);
+        double targetHeight = _expanded ? 236 : (needsDetail ? 68 : 42);
         if (_width.Target == targetWidth && _height.Target == targetHeight) return;
         _width.Target = targetWidth;
         _height.Target = targetHeight;
@@ -168,6 +172,13 @@ internal sealed class IslandApp : IDisposable
                 if (!_menuOpen) SetTimer(hwnd, (UIntPtr)CollapseTimer, 180, IntPtr.Zero);
                 return IntPtr.Zero;
             case WM_LBUTTONUP:
+                if (_agents?.Pending is { } request)
+                {
+                    string details = $"Codex requests approval\n\nProject: {request.Project}\nTool: {request.Tool}\n\n{request.Details}\n\nAllow this action?";
+                    int response = MessageBox(_hwnd, details, "Xylo — review Codex request", 0x123);
+                    request.Completion.TrySetResult(response == 6 ? "allow" : response == 7 ? "deny" : "defer");
+                    return IntPtr.Zero;
+                }
                 if (_expanded && _media?.Snapshot != null)
                 {
                     float mx = (short)(lParam.ToInt64() & 0xffff) / _scale;
@@ -297,7 +308,7 @@ internal sealed class IslandApp : IDisposable
     private void Draw()
     {
         if (_surface is null) return;
-        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus);
+        _renderer.Draw(_surface.Canvas, _scale, (float)_width.Value, (float)_height.Value, _settings.Detached, _battery, _clock.Elapsed.TotalSeconds, _blinkStarted, _media?.Snapshot, _lyrics?.Snapshot, _focus, _agents?.Pending, _agents?.PendingCount ?? 0, _agents?.Activity);
         _surface.Canvas.Flush();
         var destination = new POINT { X = _x, Y = _y };
         var source = new POINT();
@@ -462,6 +473,7 @@ internal sealed class IslandApp : IDisposable
         if (_hotkeyRegistered) UnregisterHotKey(_hwnd, 1);
         _media?.Dispose();
         _lyrics?.Dispose();
+        _agents?.Dispose();
         if (_clipboardListening) RemoveClipboardFormatListener(_hwnd);
         if (_trayAdded) Shell_NotifyIcon(NIM_DELETE, ref _tray);
         if (IsWindow(_hwnd)) DestroyWindow(_hwnd);
