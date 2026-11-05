@@ -44,6 +44,9 @@ internal sealed partial class IslandApp : IDisposable
     private bool _userAfk, _inputInitialized;
     private uint _lastInputTick;
     private double _userMotionStarted = -1;
+    private MascotState _mascotTarget;
+    private double _mascotTransitionUntil;
+    private uint _mascotTimerInterval;
     private MediaService? _media;
     private LyricsService? _lyrics;
     private AgentBridge? _agents;
@@ -461,8 +464,11 @@ internal sealed partial class IslandApp : IDisposable
                 else if (wParam.ToInt64() == ChargeAnimationTimer) _dirty = true;
                 else if (wParam.ToInt64() == AgentFrameTimer)
                 {
-                    if (!MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice, UserMotionActive(), _userAfk)) KillTimer(hwnd, (UIntPtr)AgentFrameTimer);
-                    else _dirty = true;
+                    if (GetMascotState(_agents?.Activity, _agents?.Pending, _agents?.Notice, _userAfk) != _mascotTarget) SyncAgentAnimation();
+                    if (!MascotNeedsAnimation(_agents?.Activity, _agents?.Pending, _agents?.Notice, UserMotionActive(), _userAfk) && _clock.Elapsed.TotalSeconds >= _mascotTransitionUntil)
+                    { KillTimer(hwnd, (UIntPtr)AgentFrameTimer); _mascotTimerInterval = 0; }
+                    else if (_mascotTarget == MascotState.Sleeping && _clock.Elapsed.TotalSeconds >= _mascotTransitionUntil && _mascotTimerInterval != 50) SyncAgentAnimation();
+                    _dirty = true;
                 }
                 else if (wParam.ToInt64() == UserIdleTimer) RefreshUserIdle();
                 else if (wParam.ToInt64() == ClockTimer) _dirty = true;
@@ -558,16 +564,24 @@ internal sealed partial class IslandApp : IDisposable
         var approval = _agents?.Pending;
         var notice = _agents?.Notice;
         bool userMotion = UserMotionActive();
-        if (MascotNeedsAnimation(activity, approval, notice, userMotion, _userAfk))
+        MascotState target = GetMascotState(activity, approval, notice, _userAfk);
+        double now = _clock.Elapsed.TotalSeconds;
+        if (target != _mascotTarget) { _mascotTarget = target; _mascotTransitionUntil = now + MascotTransition.Duration + 0.2; }
+        bool transitioning = now < _mascotTransitionUntil;
+        if (MascotNeedsAnimation(activity, approval, notice, userMotion, _userAfk) || transitioning)
         {
-            bool sleepingOnly = _userAfk && activity?.Working != true && approval == null && notice == null;
-            SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, sleepingOnly ? 50u : 33u, IntPtr.Zero);
+            bool sleepingOnly = !transitioning && _userAfk && activity?.Working != true && approval == null && notice == null;
+            uint interval = sleepingOnly ? 50u : 33u;
+            if (_mascotTimerInterval != interval && SetTimer(_hwnd, (UIntPtr)AgentFrameTimer, interval, IntPtr.Zero) != UIntPtr.Zero) _mascotTimerInterval = interval;
         }
-        else KillTimer(_hwnd, (UIntPtr)AgentFrameTimer);
+        else if (_mascotTimerInterval != 0) { KillTimer(_hwnd, (UIntPtr)AgentFrameTimer); _mascotTimerInterval = 0; }
     }
 
     internal static bool MascotNeedsAnimation(AgentActivity? activity, AgentApproval? approval, AgentNotice? notice, bool userMotion = false, bool userAfk = false) =>
         activity?.Working == true || approval != null || notice != null || userMotion || userAfk;
+
+    internal static MascotState GetMascotState(AgentActivity? activity, AgentApproval? approval, AgentNotice? notice, bool userAfk) =>
+        approval != null || notice != null ? MascotState.Attention : activity?.Working == true ? MascotState.Working : userAfk ? MascotState.Sleeping : MascotState.Awake;
 
     private bool UserMotionActive() => !_userAfk && _userMotionStarted >= 0 && _clock.Elapsed.TotalSeconds - _userMotionStarted < 0.7;
     internal static bool IsUserAfk(uint now, uint lastInput) => unchecked(now - lastInput) >= 60000;

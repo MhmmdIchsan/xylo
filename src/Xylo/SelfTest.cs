@@ -45,9 +45,9 @@ internal static class SelfTest
         var agent = new AgentActivity("Codex", "test", "test", true, DateTimeOffset.UtcNow);
         using var first = new SkiaSharp.SKBitmap(700, 420);
         using var second = new SkiaSharp.SKBitmap(700, 420);
-        using var renderer = new IslandRenderer();
         bool HasMotion(AgentActivity? state, AgentApproval? approval, AgentNotice? notice, bool userAfk = false, double userMotionStarted = -1)
         {
+            using var renderer = new IslandRenderer();
             void Render(SkiaSharp.SKBitmap bitmap, double seconds)
             {
                 using var canvas = new SkiaSharp.SKCanvas(bitmap);
@@ -73,6 +73,21 @@ internal static class SelfTest
             && IslandApp.MascotNeedsAnimation(interrupted, null, null, userAfk: true)
             && IslandRenderer.SleepGlyphOpacity(3.2 * 0.70, 2) > IslandRenderer.SleepGlyphOpacity(3.2 * 0.98, 2)
             && IslandRenderer.SleepGlyphOpacity(0, 2) == 0;
+    }
+
+    private static bool TestMascotTransitions()
+    {
+        var transition = new MascotTransition();
+        transition.Update(MascotState.Sleeping, 0);
+        var halfway = transition.Update(MascotState.Sleeping, 0.25);
+        var retargeted = transition.Update(MascotState.Attention, 0.25);
+        var attention = transition.Update(MascotState.Attention, 0.75);
+        var workingStart = transition.Update(MascotState.Working, 0.75);
+        var working = transition.Update(MascotState.Working, 1.25);
+        var awakeStart = transition.Update(MascotState.Awake, 1.25);
+        var awake = transition.Update(MascotState.Awake, 1.75);
+        return Math.Abs(halfway.Sleep - 0.5f) < 0.001 && retargeted == halfway && attention.Attention == 1
+            && workingStart == attention && working.Work == 1 && awakeStart == working && awake == MascotBlend.For(MascotState.Awake);
     }
 
     private static bool TestMediaRendering()
@@ -165,7 +180,7 @@ internal static class SelfTest
         var limits = CodexLimitService.Parse(limitsJson.RootElement);
         bool staysLocked = !review.CanApprove;
         review.Next();
-        bool valid = TestMediaRendering() && TestAgentAnimation() && lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
+        bool valid = TestMediaRendering() && TestAgentAnimation() && TestMascotTransitions() && lines.Length == 3 && lines[0].At == 2.5 && lines[1].At == 4 && lines[2].At == 7.25
             && synced.Current(1) == "♪" && synced.Current(3) == "first" && synced.Current(8) == "second"
             && plain.Current(0) == "one" && plain.Visible(0).SequenceEqual(new[] { "one", "two", "three" })
             && ReferenceEquals(plain.Visible(0), plain.Visible(5)) && duplicateTimes.Current(2) == "second" && duplicateTimes.Current(4) == "♪" && duplicateTimes.Visible(2)[0] == "second"

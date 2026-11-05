@@ -11,6 +11,7 @@ internal sealed class IslandRenderer : IDisposable
     private readonly SKPath _maskPath = new();
     private readonly SKPath _maskSegment = new();
     private readonly SKPathMeasure _maskMeasure = new();
+    private readonly MascotTransition _mascotTransition = new();
     private readonly SKPaint _contentOpacity = new();
     private byte[]? _artData;
     private SKBitmap? _artwork;
@@ -49,11 +50,12 @@ internal sealed class IslandRenderer : IDisposable
         _paint.Style = SKPaintStyle.Fill;
         canvas.ClipPath(_outline, SKClipOperation.Intersect, true);
 
-        bool attention = approval != null || notice != null || review != null;
-        bool isWorking = !attention && agent?.Working == true;
-        bool sleeping = !attention && !isWorking && userAfk;
-        float pulse = (float)(0.5 + 0.5 * Math.Sin(seconds * (attention ? 4.2 : 2.6)));
-        float lift = attention ? -0.7f * pulse : isWorking ? -0.5f * pulse : 0;
+        MascotState mascotState = review != null ? MascotState.Attention : IslandApp.GetMascotState(agent, approval, notice, userAfk);
+        MascotBlend blend = _mascotTransition.Update(mascotState, seconds);
+        float sleep = blend.Sleep, work = blend.Work, attention = blend.Attention;
+        float workPulse = (float)(0.5 + 0.5 * Math.Sin(seconds * 2.6));
+        float attentionPulse = (float)(0.5 + 0.5 * Math.Sin(seconds * 4.2));
+        float lift = -0.7f * attentionPulse * attention - 0.5f * workPulse * work;
         canvas.Save();
         canvas.Translate(0, lift);
         var mask = new SKRect(left + 11, 8, left + 44, 34);
@@ -66,9 +68,10 @@ internal sealed class IslandRenderer : IDisposable
         canvas.DrawRoundRect(new SKRect(left + 13, 10, left + 42, 32), 7, 7, _paint);
         _paint.Style = SKPaintStyle.Stroke;
         _paint.StrokeWidth = 1;
-        _paint.Color = attention ? new SKColor(255, 185, 100, (byte)(100 + 90 * pulse)) : isWorking ? new SKColor(130, 230, 190, (byte)(100 + 70 * pulse)) : new SKColor(100, 117, 119, 130);
+        _paint.StrokeCap = SKStrokeCap.Round;
+        _paint.Color = new SKColor((byte)(100 + 30 * work + 155 * attention), (byte)(117 + 113 * work + 68 * attention), (byte)(119 + 71 * work - 19 * attention), (byte)(130 + 40 * work + 60 * attention));
         canvas.DrawRoundRect(mask, 9, 9, _paint);
-        if (isWorking)
+        if (work > 0.001f)
         {
             _maskMeasure.SetPath(null, false);
             _maskPath.Reset();
@@ -82,52 +85,53 @@ internal sealed class IslandRenderer : IDisposable
                 _maskMeasure.GetSegment(start, Math.Min(end, length), _maskSegment, true);
                 if (end > length) _maskMeasure.GetSegment(0, end - length, _maskSegment, true);
                 _paint.StrokeWidth = 2;
-                _paint.Color = new SKColor(150, 245, 205);
+                _paint.Color = new SKColor(150, 245, 205, (byte)(255 * work));
                 canvas.DrawPath(_maskSegment, _paint);
             }
         }
         _paint.Color = new SKColor(255, 255, 255, 35);
         canvas.DrawLine(left + 20, 10, left + 35, 10, _paint);
         float blink = blinkStarted < 0 ? 0 : (float)Math.Sin(Math.Clamp((seconds - blinkStarted) / 0.3, 0, 1) * Math.PI);
-        float eyeHeight = (attention ? 4.7f : 4.0f) - blink * 3.3f;
+        float eyeHeight = 4.0f + 0.7f * attention - blink * 3.3f;
         _paint.StrokeCap = SKStrokeCap.Round;
         double motionAge = seconds - userMotionStarted;
-        float thinking = isWorking ? (float)Math.Sin(seconds * 2.6) * 1.5f : !sleeping && userMotionStarted >= 0 && motionAge is >= 0 and < 0.7 ? (float)Math.Sin(motionAge / 0.7 * Math.PI) * 2 : 0;
-        if (isWorking) eyeHeight += (float)Math.Sin(seconds * 2.6) * 0.8f;
-        if (attention) eyeHeight += (pulse - 0.5f) * 1.1f;
+        float thinking = (float)Math.Sin(seconds * 2.6) * 1.5f * work;
+        if (userMotionStarted >= 0 && motionAge is >= 0 and < 0.7) thinking += (float)Math.Sin(motionAge / 0.7 * Math.PI) * 2 * (1 - sleep) * (1 - work) * (1 - attention);
+        eyeHeight += (float)Math.Sin(seconds * 2.6) * 0.8f * work + (attentionPulse - 0.5f) * 1.1f * attention;
         foreach (float eyeX in new[] { left + 22, left + 33 })
         {
-            if (sleeping)
+            if (sleep > 0.001f)
             {
                 _paint.StrokeWidth = 1.7f;
-                _paint.Color = new SKColor(120, 175, 155);
+                _paint.Color = new SKColor(120, 175, 155, (byte)(255 * sleep));
                 canvas.DrawArc(new SKRect(eyeX - 3.5f, 19, eyeX + 3.5f, 23), 10, 160, false, _paint);
-                continue;
             }
+            if (sleep >= 0.999f) continue;
             _paint.StrokeWidth = 4;
-            _paint.Color = attention ? new SKColor(255, 170, 80, (byte)(30 + 40 * pulse)) : new SKColor(100, 240, 185, isWorking ? (byte)(30 + 35 * pulse) : (byte)20);
+            _paint.Color = new SKColor((byte)(100 + 155 * attention), (byte)(240 - 70 * attention), (byte)(185 - 105 * attention), (byte)((20 + 35 * workPulse * work + 50 * attentionPulse * attention) * (1 - sleep)));
             canvas.DrawLine(eyeX + thinking - 3, 21 - eyeHeight, eyeX + thinking + 3, 21 + eyeHeight, _paint);
             canvas.DrawLine(eyeX + thinking + 3, 21 - eyeHeight, eyeX + thinking - 3, 21 + eyeHeight, _paint);
             _paint.StrokeWidth = 2;
-            _paint.Color = attention ? new SKColor(255, 195, 120) : new SKColor(150, 245, 205);
+            _paint.Color = new SKColor((byte)(150 + 105 * attention), (byte)(245 - 50 * attention), (byte)(205 - 85 * attention), (byte)(255 * (1 - sleep)));
             canvas.DrawLine(eyeX + thinking - 3, 21 - eyeHeight, eyeX + thinking + 3, 21 + eyeHeight, _paint);
             canvas.DrawLine(eyeX + thinking + 3, 21 - eyeHeight, eyeX + thinking - 3, 21 + eyeHeight, _paint);
         }
         _paint.Style = SKPaintStyle.Fill;
         canvas.Restore();
-        if (attention)
+        if (attention > 0.001f)
         {
-            _paint.Color = new SKColor(255, 179, 91);
+            byte alpha = (byte)(255 * attention);
+            _paint.Color = new SKColor(255, 179, 91, alpha);
             canvas.DrawCircle(left + 43, 9, 5, _paint);
-            _paint.Color = new SKColor(33, 26, 20); _paint.Style = SKPaintStyle.Stroke; _paint.StrokeWidth = 1.5f;
+            _paint.Color = new SKColor(33, 26, 20, alpha); _paint.Style = SKPaintStyle.Stroke; _paint.StrokeWidth = 1.5f;
             canvas.DrawLine(left + 43, 6.5f, left + 43, 9.5f, _paint);
             _paint.Style = SKPaintStyle.Fill; canvas.DrawCircle(left + 43, 11.5f, 0.8f, _paint);
         }
-        else if (sleeping)
+        if (sleep > 0.001f)
         {
             for (int i = 0; i < 3; i++)
             {
-                byte alpha = (byte)Math.Round(190 * SleepGlyphOpacity(seconds, i));
+                byte alpha = (byte)Math.Round(190 * sleep * SleepGlyphOpacity(seconds, i));
                 Text(canvas, "z", left + 28 + i * 6, 8 - i, 6 - i * 0.5f, new SKColor(150, 205, 188, alpha));
             }
         }
